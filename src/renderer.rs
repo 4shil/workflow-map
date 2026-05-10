@@ -381,8 +381,62 @@ impl TuiApp {
                 self.show_help = !self.show_help;
             }
 
+            // Yank (copy) step name
+            KeyCode::Char('y') | KeyCode::Char('Y') => {
+                let filtered = self.filtered_steps();
+                if self.cursor < filtered.len() {
+                    let step = &filtered[self.cursor];
+                    let text = if key.code == KeyCode::Char('Y') {
+                        self.full_step_text(step)
+                    } else {
+                        step.name.clone()
+                    };
+                    match self.copy_to_clipboard(&text) {
+                        Ok(_) => {
+                            self.toast = Some("Copied!".to_string());
+                            self.toast_ticks = 8;
+                        }
+                        Err(_) => {
+                            self.toast = Some("Clipboard unavailable".to_string());
+                            self.toast_ticks = 8;
+                        }
+                    }
+                }
+            }
+
             _ => {}
         }
+    }
+
+    /// Copy text to system clipboard.
+    fn copy_to_clipboard(&self, text: &str) -> Result<(), String> {
+        use copypasta::{ClipboardContext, ClipboardProvider};
+        let mut ctx = ClipboardContext::new().map_err(|e| format!("{e}"))?;
+        ctx.set_contents(text.to_string())
+            .map_err(|e| format!("{e}"))?;
+        Ok(())
+    }
+
+    /// Build full step detail text for yank (Y key).
+    fn full_step_text(&self, step: &FlatStep) -> String {
+        let mut lines = Vec::new();
+        lines.push(format!("Step: {}", step.name));
+        lines.push(format!("Type: {}", step.step_type));
+        lines.push(format!("Status: {}", step.status.marker()));
+        lines.push(format!("Source: {}", step.source_location));
+        if let Some(duration) = step.duration {
+            lines.push(format!("Duration: {:?}", duration));
+        }
+        if step.resources.total_tokens() > 0 || step.resources.api_calls.is_some() {
+            lines.push(format!("Resources: {}", step.resources));
+        }
+        if !step.config_snippet.is_empty() {
+            lines.push(format!("Snippet: {}", step.config_snippet));
+        }
+        if let Some(ref err) = step.error {
+            lines.push(format!("Error: {}", err.message));
+        }
+        lines.join("\n")
     }
 
     /// Collapse the step at the cursor index in the original workflow tree.
@@ -445,18 +499,12 @@ impl TuiApp {
     }
 
     fn viewport_height(&self) -> usize {
-        let height = self
-            .workflow_height()
-            .saturating_sub(RESERVED_ROWS as usize);
-        height.max(1)
+        // Use a reasonable default; the draw() method uses frame.area() directly
+        24usize.saturating_sub(RESERVED_ROWS as usize).max(1)
     }
 
     fn workflow_height(&self) -> usize {
-        if let Some(size) = self.config.render_terminal_size() {
-            size.1 as usize
-        } else {
-            24
-        }
+        24usize
     }
 
     /// Recursively find a step by id and set its collapsed state.

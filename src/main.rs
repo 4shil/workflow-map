@@ -40,7 +40,7 @@ fn main() -> Result<()> {
             .with_context(|| format!("Cannot detect framework for: {}", path.display()))?
     };
 
-    let mut workflow = parse_workflow(framework, &parser_config, &path)
+    let mut workflow = parse_workflow(framework.clone(), &parser_config, &path)
         .with_context(|| format!("Failed to parse workflow from: {}", path.display()))?;
 
     if let Some(timing_path) = cli.timing_file.as_deref() {
@@ -90,6 +90,9 @@ fn main() -> Result<()> {
     }
 
     if let Some(graph) = cli.graph.as_deref() {
+        // Re-parse for graph export (or use cache)
+        let workflow = parse_workflow(framework, &parser_config, &path)
+            .with_context(|| format!("Failed to parse workflow from: {}", path.display()))?;
         let exporter = Exporter::new(workflow);
         let output = match graph {
             "dot" => exporter.to_dot(),

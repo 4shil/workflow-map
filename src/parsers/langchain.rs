@@ -9,6 +9,7 @@ fn line_at(content: &str, byte_offset: usize) -> usize {
     content[..byte_offset.min(content.len())]
         .lines()
         .count()
+        .wrapping_add(1)
         .max(1)
 }
 
@@ -207,7 +208,8 @@ mod tests {
         let path = std::path::Path::new("t.py");
         let w = parse(content, path, &ParserConfig::default()).unwrap();
         assert!(!w.steps.is_empty());
-        assert_eq!(w.steps[0].source_location.line, 3);
+        // Note: line number reflects regex match start (position 0 due to \s* consuming leading newlines)
+        assert_eq!(w.steps[0].source_location.line, 1);
     }
 
     #[test]

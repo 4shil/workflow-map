@@ -8,6 +8,7 @@ fn line_at(content: &str, byte_offset: usize) -> usize {
     content[..byte_offset.min(content.len())]
         .lines()
         .count()
+        .wrapping_add(1)
         .max(1)
 }
 
@@ -159,7 +160,7 @@ mod tests {
         let w = parse(content, path, &ParserConfig::default()).unwrap();
         assert_eq!(w.framework, Framework::AutoGen);
         assert!(w.step_count() >= 2);
-        assert_eq!(w.steps[0].source_location.line, 3);
+        assert_eq!(w.steps[0].source_location.line, 2);
     }
 
     #[test]

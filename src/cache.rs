@@ -4,17 +4,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use crate::model::Workflow;
+use crate::model::{Framework, Workflow};
 
 #[derive(Debug, Clone)]
 pub struct CacheEntry {
     pub workflow: Workflow,
     pub modified: SystemTime,
+    pub framework: Framework,
 }
 
 #[derive(Debug, Default)]
 pub struct WorkflowCache {
-    entries: HashMap<PathBuf, CacheEntry>,
+    entries: HashMap<(PathBuf, Framework), CacheEntry>,
 }
 
 impl WorkflowCache {
@@ -22,8 +23,14 @@ impl WorkflowCache {
         Self::default()
     }
 
-    pub fn get(&self, path: &Path, modified: SystemTime) -> Option<Workflow> {
-        self.entries.get(path).and_then(|entry| {
+    pub fn get(
+        &self,
+        path: &Path,
+        modified: SystemTime,
+        framework: &Framework,
+    ) -> Option<Workflow> {
+        let key = (path.to_path_buf(), framework.clone());
+        self.entries.get(&key).and_then(|entry| {
             if entry.modified == modified {
                 Some(entry.workflow.clone())
             } else {
@@ -32,8 +39,22 @@ impl WorkflowCache {
         })
     }
 
-    pub fn insert(&mut self, path: PathBuf, modified: SystemTime, workflow: Workflow) {
-        self.entries.insert(path, CacheEntry { workflow, modified });
+    pub fn insert(
+        &mut self,
+        path: PathBuf,
+        modified: SystemTime,
+        framework: Framework,
+        workflow: Workflow,
+    ) {
+        let key = (path, framework.clone());
+        self.entries.insert(
+            key,
+            CacheEntry {
+                workflow,
+                modified,
+                framework,
+            },
+        );
     }
 }
 

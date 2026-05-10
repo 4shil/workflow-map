@@ -39,7 +39,7 @@ fn parse_file(
     let modified = file_mtime(path).unwrap_or(std::time::SystemTime::UNIX_EPOCH);
     if !config.disable_cache {
         if let Ok(cache) = CACHE.lock() {
-            if let Some(workflow) = cache.get(path, modified) {
+            if let Some(workflow) = cache.get(path, modified, &framework) {
                 return Ok(workflow);
             }
         }
@@ -61,7 +61,7 @@ fn parse_file(
 
     if !config.disable_cache {
         if let Ok(mut cache) = CACHE.lock() {
-            cache.insert(path.to_path_buf(), modified, workflow.clone());
+            cache.insert(path.to_path_buf(), modified, framework, workflow.clone());
         }
     }
 

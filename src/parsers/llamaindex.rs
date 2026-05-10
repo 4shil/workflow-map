@@ -7,6 +7,7 @@ fn line_at(content: &str, byte_offset: usize) -> usize {
     content[..byte_offset.min(content.len())]
         .lines()
         .count()
+        .wrapping_add(1)
         .max(1)
 }
 

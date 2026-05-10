@@ -1,179 +1,144 @@
 # Contributing to workflow-map
 
-Thank you for your interest in contributing! This document covers how to set up
-your development environment, the project structure, coding standards, and the
-pull request process.
+Thank you for your interest in contributing! This document covers development setup, code style, and how to add new features.
 
 ## Development Setup
 
 ### Prerequisites
+- Rust 1.75+ (install via [rustup](https://rustup.rs/))
+- Cargo (included with rustup)
+- Optional: `cargo-watch` for auto-rebuild during development
 
-- **Rust 1.75+** -- Install via [rustup](https://rustup.rs/).
-- **cargo** -- Included with Rust.
-- **cargo-watch** (optional) -- For auto-rebuilding during development:
+```bash
+# Clone the repo
+git clone https://github.com/4shil/workflow-map.git
+cd workflow-map
 
-      cargo install cargo-watch
+# Build
+cargo build
 
-### Clone and Build
+# Run all tests
+cargo test
 
-    git clone https://github.com/4shil/workflow-map.git
-    cd workflow-map
-    cargo build
+# Run linter
+cargo clippy -- -D warnings
 
-### Running Tests
+# Format code
+cargo fmt
 
-    cargo test
-    cargo test -- --test-threads=1    # Sequential (for snapshot tests)
+# Auto-rebuild on changes (requires cargo-watch)
+cargo watch -x build
+```
 
 ## Project Structure
 
-    workflow-map/
-    |-- Cargo.toml
-    |-- Cargo.lock
-    |-- README.md
-    |-- LICENSE
-    |-- .gitignore
-    |-- src/
-    |   |-- main.rs              # Entry point, CLI dispatch
-    |   |-- cli.rs               # Argument parsing (clap)
-    |   |-- config.rs            # AppConfig, ParserConfig, RenderConfig
-    |   |-- model.rs             # Workflow, Step, Edge, Framework, enums
-    |   |-- export.rs            # Exporter: text, JSON, Markdown output
-    |   |-- renderer.rs          # TUI app (ratatui): input, layout, render
-    |   |-- parsers/
-    |       |-- mod.rs           # Framework dispatch, directory walking
-    |       |-- detector.rs      # Auto-detect framework from file content
-    |       |-- langchain.rs     # LangChain Python parser
-    |       |-- crewai.rs        # CrewAI YAML parser
-    |       |-- dspy.rs          # DSPy Python parser
-    |       |-- autogen.rs       # AutoGen Python parser
-    |       |-- hermes.rs        # Hermes Agent SKILL.md parser
-    |       |-- generic.rs       # Generic YAML/JSON workflow parser
-    |-- tests/
-    |   |-- fixtures/
-    |       |-- langchain/       # LangChain test inputs (.py)
-    |       |-- crewai/          # CrewAI test inputs (.yaml)
-    |       |-- dspy/            # DSPy test inputs (.py)
-    |       |-- autogen/         # AutoGen test inputs (.py)
-    |       |-- hermes/          # Hermes test inputs (.md)
-    |       |-- generic/         # Generic test inputs (.yaml, .json)
-    |       |-- mixed/           # Mixed-format directories
-    |-- docs/
-        |-- TESTING.md           # Testing guide
-        |-- ARCHITECTURE.md      # Architecture overview
+```
+workflow-map/
+├── Cargo.toml              # Project config, dependencies
+├── README.md               # User-facing documentation
+├── CONTRIBUTING.md         # This file
+├── LICENSE                 # MIT License
+├── .github/
+│   └── workflows/
+│       ├── ci.yml          # CI: build, test, clippy, fmt
+│       └── release.yml     # Release: build binaries, create GitHub release
+├── docs/
+│   ├── ARCHITECTURE.md     # Technical architecture deep-dive
+│   ├── TESTING.md          # Testing guidelines
+│   ├── PARSERS.md          # Parser implementation guide
+│   ├── TUI.md              # TUI renderer internals
+│   └── EXPORT.md           # Export format specifications
+├── src/
+│   ├── main.rs             # CLI entry point
+│   ├── lib.rs              # Library root, re-exports
+│   ├── cli.rs              # CLI argument parsing (clap)
+│   ├── config.rs           # Config file loading (TOML)
+│   ├── model.rs            # Core data types
+│   ├── export.rs           # Export engine (text, JSON, Markdown)
+│   ├── renderer.rs         # TUI renderer (ratatui)
+│   └── parsers/
+│       ├── mod.rs          # Parser dispatcher
+│       ├── detector.rs     # Framework auto-detection
+│       ├── generic.rs      # Generic JSON/YAML parser
+│       ├── crewai.rs       # CrewAI YAML parser
+│       ├── langchain.rs    # LangChain Python parser
+│       ├── dspy.rs         # DSPy Python parser
+│       ├── autogen.rs      # AutoGen Python parser
+│       └── hermes.rs       # Hermes Agent SKILL.md parser
+└── tests/
+    ├── integration.rs      # Integration tests
+    └── fixtures/           # Sample configs for each framework
+        ├── langchain/      # 5 sample Python files
+        ├── crewai/         # 3 sample YAML files
+        ├── dspy/           # 3 sample Python files
+        ├── autogen/        # 2 sample Python files
+        ├── hermes/         # 2 sample SKILL.md files
+        ├── generic/        # 4 sample YAML/JSON files
+        └── mixed/          # 3 files from different frameworks
+```
 
 ## Code Style
 
 ### Formatting
-
-All code must be formatted with `rustfmt`:
-
-    cargo fmt
-
-Check without modifying:
-
-    cargo fmt --check
+- Run `cargo fmt` before every commit
+- CI will reject unformatted code
 
 ### Linting
-
-Run Clippy on every commit:
-
-    cargo clippy -- -D warnings
+- Run `cargo clippy -- -D warnings` before every commit
+- All clippy warnings must be resolved
+- Use `#[allow(...)]` sparingly and only with a comment explaining why
 
 ### Commit Messages
+- **NO prefixes** like `feat:`, `fix:`, `step:`, `docs:`, `chore:`
+- Write descriptive, imperative-mood messages
+- Examples:
+  - `Add CrewAI YAML config parser`
+  - `Fix detector for SKILL.md files with underscores`
+  - `Add integration tests for all parsers`
+  - `Update README with installation instructions`
 
-Use clear, descriptive commit messages. Do **not** use conventional-commit
-prefixes (`feat:`, `fix:`, `step:`, `docs:`, etc.). Instead, write plain
-imperative sentences:
+### Testing
+- Write tests for every new parser, feature, or bug fix
+- Follow TDD: write the failing test first, then implement
+- Unit tests go in the same file as the code (`#[cfg(test)] mod tests`)
+- Integration tests go in `tests/integration.rs`
+- Test fixtures go in `tests/fixtures/<framework>/`
 
-    Add support for CrewAI task dependencies
+## Adding a New Framework Parser
 
-    Handle empty YAML files in generic parser
-
-    Fix off-by-one error in TUI scroll offset
-
-## How to Add a New Framework Parser
-
-1. **Create the parser module** at `src/parsers/<name>.rs`. Implement a
-   `parse(content: &str, path: &Path, config: &ParserConfig) -> Result<Workflow>`
-   function.
-
-2. **Register the framework** in `src/model.rs`:
-   - Add a variant to the `Framework` enum.
-   - Update `Framework::all()`, `Display`, and serialization.
-
-3. **Add detection rules** in `src/parsers/detector.rs`:
-   - Add file-extension and content-based heuristics.
-
-4. **Wire it into the dispatcher** in `src/parsers/mod.rs`:
-   - Add a match arm in `parse_file()` and `parse_framework_name()`.
-
-5. **Update the CLI** in `src/cli.rs`:
-   - Add the framework name to the `--framework` value parser list.
-
-6. **Add test fixtures** under `tests/fixtures/<name>/` with at least:
-   - A valid input file.
-   - An empty/edge-case file.
-   - A malformed input file.
-
-7. **Document it** in the Supported Frameworks table in `README.md`.
-
-## Testing Guidelines
-
-### Test-Driven Development
-
-Write tests before or alongside new parser logic. Every parser should have:
-
-- **Unit tests** covering each parsing branch (valid, empty, malformed).
-- **Integration tests** that parse fixture files and assert on the resulting
-  `Workflow` model.
-
-### Fixture Files
-
-Place test inputs under `tests/fixtures/<framework>/`. Each fixture should be a
-minimal, representative example:
-
-    tests/fixtures/
-    |-- langchain/
-    |   |-- simple_chain.py     # Valid input
-    |   |-- empty.py            # Edge case
-    |   |-- malformed.py        # Invalid input
-
-### Running Tests
-
-    cargo test                              # All tests
-    cargo test langchain                    # Filter by name
-    cargo test -- --test-threads=1          # Sequential (for snapshots)
-    cargo test -- --nocapture               # Show println! output
+1. Create `src/parsers/<framework>.rs` with a `parse(content, path) -> Result<Workflow>` function
+2. Add `pub mod <framework>;` to `src/parsers/mod.rs`
+3. Add detection logic to `src/parsers/detector.rs`
+4. Add a match arm in `src/parsers/mod.rs` `parse_workflow()`
+5. Add test fixtures in `tests/fixtures/<framework>/`
+6. Add unit tests in the parser module
+7. Add integration tests in `tests/integration.rs`
+8. Update the Supported Frameworks table in README.md
+9. Commit with message: `Add <Framework> parser`
 
 ## Pull Request Process
 
-1. **Fork the repository** and create a feature branch.
+1. Fork the repository (or branch if you have access)
+2. Create a feature branch: `git checkout -b add-xyz-parser`
+3. Make your changes, following the code style above
+4. Run `cargo test` and `cargo clippy -- -D warnings`
+5. Commit with descriptive messages (no prefixes)
+6. Push and open a PR
+7. CI must pass (build, test, clippy, fmt)
+8. Address review feedback
+9. Squash if requested, then merge
 
-2. **Make your changes** with tests.
+## Code Review Checklist
 
-3. **Verify everything passes**:
-
-       cargo fmt --check
-       cargo clippy -- -D warnings
-       cargo test
-
-4. **Write a clear PR description** summarizing:
-   - What changed and why.
-   - Which frameworks or modules are affected.
-   - How you tested the changes.
-
-5. **Reference any related issues** with `Closes #N` or `Relates to #N`.
-
-6. **Request review** from a maintainer.
-
-7. **Address review feedback** and re-verify CI passes.
-
-### PR Checklist
-
+- [ ] Tests pass (`cargo test`)
+- [ ] No clippy warnings (`cargo clippy -- -D warnings`)
 - [ ] Code formatted (`cargo fmt --check`)
-- [ ] No Clippy warnings (`cargo clippy -- -D warnings`)
-- [ ] All tests pass (`cargo test`)
-- [ ] New functionality includes tests
--   Fixtures added for new parsers
-- [ ] Documentation updated (README, docs/)
+- [ ] New code has tests
+- [ ] Test fixtures added for new parsers
+- [ ] README updated if adding new features
+- [ ] No hardcoded secrets or credentials
+- [ ] Error handling is graceful (no panics on bad input)
+
+## Questions?
+
+Open an issue on GitHub or reach out to the maintainers.

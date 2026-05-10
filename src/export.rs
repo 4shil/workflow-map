@@ -36,12 +36,19 @@ impl Exporter {
             let step_num = idx + 1;
             let indent = "  ".repeat(step.depth);
             let collapse = if step.has_children {
-                if step.collapsed { "[+]" } else { "[-]" }
+                if step.collapsed {
+                    "[+]"
+                } else {
+                    "[-]"
+                }
             } else {
                 "[ ]"
             };
             let error_prefix = if step.status.is_error() { "*" } else { "" };
-            lines.push(format!("{indent}{collapse} {error_prefix}{step_num}. {}", step.name));
+            lines.push(format!(
+                "{indent}{collapse} {error_prefix}{step_num}. {}",
+                step.name
+            ));
         }
 
         lines.push(String::new());
@@ -61,6 +68,15 @@ impl Exporter {
         lines.push(String::new());
         lines.push(format!("Framework: {}", self.workflow.framework));
         lines.push(String::new());
+
+        if !self.workflow.validation_warnings.is_empty() {
+            lines.push("## Validation warnings".to_string());
+            lines.push(String::new());
+            for warning in &self.workflow.validation_warnings {
+                lines.push(format!("- {warning}"));
+            }
+            lines.push(String::new());
+        }
 
         lines.push("## Table of Contents".to_string());
         lines.push(String::new());
@@ -82,6 +98,12 @@ impl Exporter {
             lines.push(format!("- **Type:** {}", step.step_type));
             lines.push(format!("- **Status:** {}", step.status.marker()));
             lines.push(format!("- **Source:** {}", step.source_location));
+            if let Some(duration) = step.duration {
+                lines.push(format!("- **Duration:** {:?}", duration));
+            }
+            if step.resources.total_tokens() > 0 || step.resources.api_calls.is_some() {
+                lines.push(format!("- **Resources:** {}", step.resources));
+            }
             let snippet: &str = if step.config_snippet.len() > 200 {
                 &step.config_snippet[..200]
             } else {
@@ -125,6 +147,61 @@ impl Exporter {
             lines.push(String::new());
         }
 
+        lines.join("\n")
+    }
+
+    pub fn to_dot(&self) -> String {
+        let mut lines: Vec<String> = Vec::new();
+        lines.push("digraph workflow {".to_string());
+        lines.push("  rankdir=LR;".to_string());
+        lines.push("  node [shape=box, style=rounded];".to_string());
+
+        for step in self.workflow.flatten_steps() {
+            let label = format!("{}\\n{}", step.name, step.step_type);
+            let color = match step.status {
+                crate::model::Status::Ok => "#2e7d32",
+                crate::model::Status::Error => "#c62828",
+                crate::model::Status::Running => "#f9a825",
+                crate::model::Status::Waiting => "#546e7a",
+                crate::model::Status::Skipped => "#9e9e9e",
+            };
+            lines.push(format!(
+                "  \"{}\" [label=\"{}\", color=\"{}\"];",
+                step.id, label, color
+            ));
+        }
+
+        for edge in &self.workflow.edges {
+            let label = match edge.edge_type {
+                EdgeType::Sequential => "seq",
+                EdgeType::Conditional => "cond",
+                EdgeType::Parallel => "par",
+            };
+            lines.push(format!(
+                "  \"{}\" -> \"{}\" [label=\"{}\"];",
+                edge.from, edge.to, label
+            ));
+        }
+
+        lines.push("}".to_string());
+        lines.join("\n")
+    }
+
+    pub fn to_mermaid(&self) -> String {
+        let mut lines: Vec<String> = Vec::new();
+        lines.push("flowchart LR".to_string());
+        for step in self.workflow.flatten_steps() {
+            let node = format!("{}[\"{}\"]", step.id, step.name);
+            lines.push(format!("  {node}"));
+        }
+        for edge in &self.workflow.edges {
+            let label = match edge.edge_type {
+                EdgeType::Sequential => "",
+                EdgeType::Conditional => "|cond|",
+                EdgeType::Parallel => "|par|",
+            };
+            lines.push(format!("  {} {} {}", edge.from, label, edge.to));
+        }
         lines.join("\n")
     }
 }

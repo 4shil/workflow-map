@@ -38,6 +38,12 @@ workflow-map ./pipeline.py --format text
 # JSON export
 workflow-map ./dspy_program.py --format json --output workflow.json
 
+# Graphviz DOT export
+workflow-map ./workflow.yaml --format json --graph dot --output workflow.dot
+
+# Mermaid export
+workflow-map ./workflow.yaml --format json --graph mermaid --output workflow.mmd
+
 # Watch mode
 workflow-map ./my_workflow.yaml --watch
 ```

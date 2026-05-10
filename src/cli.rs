@@ -38,6 +38,10 @@ pub struct Cli {
     #[arg(short, long, value_enum, default_value_t = OutputFormat::Interactive)]
     pub format: OutputFormat,
 
+    /// Graph export format (dot, mermaid) when applicable.
+    #[arg(long, value_parser = ["dot", "mermaid"])]
+    pub graph: Option<String>,
+
     /// Output file path (default: stdout for non-interactive).
     #[arg(short, long)]
     pub output: Option<String>,

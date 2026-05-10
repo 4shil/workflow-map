@@ -95,6 +95,17 @@ Full workflow serialization. Pretty-printed with 2-space indent.
 }
 ```
 
+## Graph Formats
+
+DOT and Mermaid are supported via `--graph`:
+
+```
+workflow-map ./workflow.yaml --format json --graph dot --output workflow.dot
+workflow-map ./workflow.yaml --format json --graph mermaid --output workflow.mmd
+```
+
+See `docs/EXPORT_DOT_MERMAID.md` for details.
+
 ## Markdown Format
 
 Human-readable document. Suitable for Obsidium notes, GitHub rendering, or documentation sites.

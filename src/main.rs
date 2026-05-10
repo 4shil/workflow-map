@@ -67,5 +67,20 @@ fn main() -> Result<()> {
         }
     }
 
+    if let Some(graph) = cli.graph.as_deref() {
+        let exporter = Exporter::new(workflow);
+        let output = match graph {
+            "dot" => exporter.to_dot(),
+            "mermaid" => exporter.to_mermaid(),
+            _ => String::new(),
+        };
+        if !output.is_empty() {
+            match &cli.output {
+                Some(path) => std::fs::write(path, output)?,
+                None => print!("{output}"),
+            }
+        }
+    }
+
     Ok(())
 }

@@ -4,6 +4,10 @@ use anyhow::Result;
 use regex::Regex;
 use std::path::Path;
 
+fn line_at(content: &str, byte_offset: usize) -> usize {
+    content[..byte_offset.min(content.len())].lines().count().max(1)
+}
+
 pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workflow> {
     let mut workflow = Workflow::new(
         path.file_stem()
@@ -13,18 +17,19 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
     );
 
     let mut step_counter = 0;
+    let path_str = path.to_string_lossy().to_string();
 
-    // Pattern 1: dspy.Module subclasses
     let module_re = Regex::new(
         r"(?m)class\s+(\w+)\s*\(\s*dspy\.Module\s*\)",
     ).ok();
 
     if let Some(ref re) = module_re {
-        for captures in re.captures_iter(content) {
+        for mat in re.find_iter(content) {
             step_counter += 1;
+            let captures = re.captures(mat.as_str()).unwrap();
             let class_name = captures.get(1).map(|m| m.as_str()).unwrap_or("Module");
+            let line = line_at(content, mat.start());
 
-            // Find forward method to extract sub-steps
             let forward_content = extract_method_content(content, "forward");
 
             let mut step = Step::new(
@@ -32,12 +37,11 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
                 class_name,
                 StepType::Module,
             )
-            .with_source(SourceLocation::new(path.to_string_lossy().to_string(), 1))
+            .with_source(SourceLocation::new(&path_str, line))
             .with_snippet(format!("class {class_name}(dspy.Module)"));
 
-            // Parse forward() sub-calls
             if let Some(forward) = forward_content {
-                let sub_steps = parse_dspy_forward(&forward, path);
+                let sub_steps = parse_dspy_forward(&forward, path, &path_str);
                 step = step.with_children(sub_steps);
             }
 
@@ -45,24 +49,22 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
         }
     }
 
-    // Pattern 2: dspy.Predict / dspy.ChainOfThought direct usage
     let predict_re = Regex::new(
         r"(?m)\s*(\w+)\s*=\s*dspy\.(Predict|ChainOfThought|Retrieve)\s*\(",
     ).ok();
 
     if let Some(ref re) = predict_re {
-        for captures in re.captures_iter(content) {
+        for mat in re.find_iter(content) {
             step_counter += 1;
+            let captures = re.captures(mat.as_str()).unwrap();
             let var_name = captures.get(1).map(|m| m.as_str()).unwrap_or("predict");
             let pred_type = captures.get(2).map(|m| m.as_str()).unwrap_or("Predict");
+            let line = line_at(content, mat.start());
 
             let step_type = match pred_type {
                 "Retrieve" => StepType::Retrieve,
                 _ => StepType::Predict,
             };
-
-            let sig_start = captures.get(0).map(|m| m.start()).unwrap_or(0);
-            let line_num = content[..sig_start].lines().count();
 
             workflow.steps.push(
                 Step::new(
@@ -70,8 +72,36 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
                     format!("{var_name} (dspy.{pred_type})"),
                     step_type,
                 )
-                .with_source(SourceLocation::new(path.to_string_lossy().to_string(), line_num))
+                .with_source(SourceLocation::new(&path_str, line))
                 .with_snippet(format!("{var_name} = dspy.{pred_type}(...)")),
+            );
+        }
+    }
+
+    // Conditional detection
+    let if_re = Regex::new(r"(?m)^(\s*)if\s+.+:").ok();
+    if let Some(ref re) = if_re {
+        for mat in re.find_iter(content) {
+            step_counter += 1;
+            let line = line_at(content, mat.start());
+            workflow.steps.push(
+                Step::new(format!("dspy_cond_{step_counter}"), "Conditional branch".to_string(), StepType::Conditional)
+                    .with_source(SourceLocation::new(&path_str, line))
+                    .with_snippet(mat.as_str().trim().to_string()),
+            );
+        }
+    }
+
+    // Loop detection
+    let loop_re = Regex::new(r"(?m)^(\s*)(for|while)\s+.+:").ok();
+    if let Some(ref re) = loop_re {
+        for mat in re.find_iter(content) {
+            step_counter += 1;
+            let line = line_at(content, mat.start());
+            workflow.steps.push(
+                Step::new(format!("dspy_loop_{step_counter}"), "Loop".to_string(), StepType::Loop)
+                    .with_source(SourceLocation::new(&path_str, line))
+                    .with_snippet(mat.as_str().trim().to_string()),
             );
         }
     }
@@ -89,8 +119,6 @@ fn extract_method_content(content: &str, method_name: &str) -> Option<String> {
     let mat = re.find(content)?;
     let start = mat.end();
     let rest = &content[start..];
-
-    // Extract until next method/class at same or lower indentation
     let mut lines = Vec::new();
     for line in rest.lines() {
         if line.trim().is_empty() {
@@ -103,32 +131,25 @@ fn extract_method_content(content: &str, method_name: &str) -> Option<String> {
         }
         lines.push(line.to_string());
     }
-
     Some(lines.join("\n"))
 }
 
-fn parse_dspy_forward(content: &str, path: &Path) -> Vec<Step> {
+fn parse_dspy_forward(content: &str, _path: &Path, path_str: &str) -> Vec<Step> {
     let mut steps = Vec::new();
     let call_re = Regex::new(r"(?m)\s*self\.(\w+)\s*\(").ok();
-
     if let Some(ref re) = call_re {
-        for (i, captures) in re.captures_iter(content).enumerate() {
+        for (i, mat) in re.find_iter(content).enumerate() {
+            let captures = re.captures(mat.as_str()).unwrap();
             let method_name = captures.get(1).map(|m| m.as_str()).unwrap_or("call");
-            if method_name == "forward" {
-                continue;
-            }
+            if method_name == "forward" { continue; }
+            let line = line_at(content, mat.start());
             steps.push(
-                Step::new(
-                    format!("dspy_sub_{i}"),
-                    method_name.to_string(),
-                    StepType::Predict,
-                )
-                .with_source(SourceLocation::new(path.to_string_lossy().to_string(), 1))
-                .with_snippet(format!("self.{method_name}(...)")),
+                Step::new(format!("dspy_sub_{i}"), method_name.to_string(), StepType::Predict)
+                    .with_source(SourceLocation::new(path_str, line))
+                    .with_snippet(format!("self.{method_name}(...)")),
             );
         }
     }
-
     steps
 }
 
@@ -138,32 +159,28 @@ mod tests {
 
     #[test]
     fn test_parse_dspy_module() {
-        let content = r#"
-import dspy
-
-class RAG(dspy.Module):
-    def __init__(self):
-        self.retrieve = dspy.Retrieve(k=3)
-        self.generate = dspy.ChainOfThought("context, question -> answer")
-
-    def forward(self, question):
-        context = self.retrieve(question)
-        return self.generate(context=context, question=question)
-"#;
+        let content = "import dspy\n\nclass RAG(dspy.Module):\n    def forward(self, q):\n        pass\n";
         let path = std::path::Path::new("test.py");
         let w = parse(content, path, &ParserConfig::default()).unwrap();
         assert!(!w.steps.is_empty());
         assert_eq!(w.framework, Framework::DSPy);
+        assert_eq!(w.steps[0].source_location.line, 3);
     }
 
     #[test]
     fn test_parse_dspy_predict() {
-        let content = r#"
-import dspy
-qa = dspy.Predict("question -> answer")
-"#;
+        let content = "import dspy\nqa = dspy.Predict(\"q -> a\")\n";
         let path = std::path::Path::new("test.py");
         let w = parse(content, path, &ParserConfig::default()).unwrap();
         assert!(w.steps.iter().any(|s| s.name.contains("qa")));
+        assert_eq!(w.steps[0].source_location.line, 2);
+    }
+
+    #[test]
+    fn test_conditional_detection() {
+        let content = "if x > 0:\n    qa = dspy.Predict(\"q -> a\")\n";
+        let path = std::path::Path::new("test.py");
+        let w = parse(content, path, &ParserConfig::default()).unwrap();
+        assert!(w.steps.iter().any(|s| matches!(s.step_type, StepType::Conditional)));
     }
 }

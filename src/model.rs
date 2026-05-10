@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// Represents the detected or specified framework type for a workflow source.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -30,7 +31,6 @@ impl fmt::Display for Framework {
 }
 
 impl Framework {
-    /// All supported framework variants.
     pub fn all() -> &'static [Framework] {
         &[
             Framework::LangChain,
@@ -43,7 +43,6 @@ impl Framework {
     }
 }
 
-/// The type of a single step in a workflow.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum StepType {
     Agent,
@@ -55,6 +54,9 @@ pub enum StepType {
     Retrieve,
     Lambda,
     Module,
+    Conditional,
+    Loop,
+    ErrorHandler,
 }
 
 impl fmt::Display for StepType {
@@ -69,12 +71,13 @@ impl fmt::Display for StepType {
             StepType::Retrieve => write!(f, "Retrieve"),
             StepType::Lambda => write!(f, "Lambda"),
             StepType::Module => write!(f, "Module"),
+            StepType::Conditional => write!(f, "Conditional"),
+            StepType::Loop => write!(f, "Loop"),
+            StepType::ErrorHandler => write!(f, "ErrorHandler"),
         }
     }
 }
 
-/// Execution status of a step. In v1, all steps default to Waiting
-/// since the tool performs static analysis only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Status {
     Ok,
@@ -85,7 +88,6 @@ pub enum Status {
 }
 
 impl Status {
-    /// Returns the single-character marker used in ASCII rendering.
     pub fn marker(&self) -> &'static str {
         match self {
             Status::Ok => "OK",
@@ -96,7 +98,6 @@ impl Status {
         }
     }
 
-    /// Returns true if this status represents a failure.
     pub fn is_error(&self) -> bool {
         matches!(self, Status::Error)
     }
@@ -108,7 +109,88 @@ impl Default for Status {
     }
 }
 
-/// Source file location for a step definition.
+/// Resource usage tracking for a step.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+pub struct ResourceUsage {
+    pub tokens_in: Option<u64>,
+    pub tokens_out: Option<u64>,
+    pub api_calls: Option<u32>,
+    pub cost_usd: Option<f64>,
+}
+
+impl ResourceUsage {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn with_tokens(mut self, input: u64, output: u64) -> Self {
+        self.tokens_in = Some(input);
+        self.tokens_out = Some(output);
+        self
+    }
+
+    pub fn with_api_calls(mut self, calls: u32) -> Self {
+        self.api_calls = Some(calls);
+        self
+    }
+
+    pub fn with_cost(mut self, cost: f64) -> Self {
+        self.cost_usd = Some(cost);
+        self
+    }
+
+    pub fn total_tokens(&self) -> u64 {
+        self.tokens_in.unwrap_or(0) + self.tokens_out.unwrap_or(0)
+    }
+}
+
+impl fmt::Display for ResourceUsage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut parts = Vec::new();
+        if let Some(t) = self.tokens_in {
+            parts.push(format!("in:{t}"));
+        }
+        if let Some(t) = self.tokens_out {
+            parts.push(format!("out:{t}"));
+        }
+        if let Some(c) = self.api_calls {
+            parts.push(format!("calls:{c}"));
+        }
+        if let Some(c) = self.cost_usd {
+            parts.push(format!("${c:.4}"));
+        }
+        if parts.is_empty() {
+            write!(f, "none")
+        } else {
+            write!(f, "{}", parts.join(" "))
+        }
+    }
+}
+
+/// Detected graph pattern for a group of steps.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum GraphPattern {
+    Pipeline,
+    Diamond,
+    FanIn,
+    FanOut,
+    DAG,
+    Unknown,
+}
+
+impl fmt::Display for GraphPattern {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            GraphPattern::Pipeline => write!(f, "pipeline"),
+            GraphPattern::Diamond => write!(f, "diamond"),
+            GraphPattern::FanIn => write!(f, "fan-in"),
+            GraphPattern::FanOut => write!(f, "fan-out"),
+            GraphPattern::DAG => write!(f, "dag"),
+            GraphPattern::Unknown => write!(f, "unknown"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceLocation {
     pub file: PathBuf,
@@ -141,7 +223,6 @@ impl fmt::Display for SourceLocation {
     }
 }
 
-/// Error detail associated with a failed step.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ErrorDetail {
     pub message: String,
@@ -150,7 +231,7 @@ pub struct ErrorDetail {
 }
 
 /// A single step (node) in a workflow graph.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Step {
     pub id: String,
     pub name: String,
@@ -161,6 +242,10 @@ pub struct Step {
     pub error: Option<ErrorDetail>,
     pub children: Vec<Step>,
     pub dependencies: Vec<String>,
+    /// Timing information for this step.
+    pub duration: Option<Duration>,
+    /// Resource usage for this step.
+    pub resources: ResourceUsage,
     collapsed: bool,
 }
 
@@ -176,6 +261,8 @@ impl Step {
             error: None,
             children: Vec::new(),
             dependencies: Vec::new(),
+            duration: None,
+            resources: ResourceUsage::new(),
             collapsed: false,
         }
     }
@@ -211,26 +298,32 @@ impl Step {
         self
     }
 
+    pub fn with_duration(mut self, duration: Duration) -> Self {
+        self.duration = Some(duration);
+        self
+    }
+
+    pub fn with_resources(mut self, resources: ResourceUsage) -> Self {
+        self.resources = resources;
+        self
+    }
+
     pub fn is_collapsed(&self) -> bool {
         self.collapsed
     }
 
     pub fn set_collapse(&mut self, collapsed: bool) {
-        self.collapsed = collapsed;
+        self.collapsed = collapsed
     }
 
     pub fn toggle_collapse(&mut self) {
         self.collapsed = !self.collapsed
     }
 
-    /// Nesting depth: 0 if no parent context, incremented by callers.
     pub fn depth(&self) -> usize {
-        // Depth is set by the parser; defaults to 0 for top-level steps.
-        // Children inherit parent depth + 1.
         0
     }
 
-    /// Total number of visible steps including children (respecting collapse).
     pub fn visible_count(&self) -> usize {
         let mut count = 1;
         if !self.collapsed {
@@ -242,7 +335,6 @@ impl Step {
     }
 }
 
-/// The type of connection between two steps.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum EdgeType {
     Sequential,
@@ -250,7 +342,6 @@ pub enum EdgeType {
     Parallel,
 }
 
-/// A directed edge between two steps.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Edge {
     pub from: String,
@@ -274,7 +365,7 @@ impl Edge {
 }
 
 /// The unified workflow model produced by all parsers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Workflow {
     pub name: String,
     pub source_path: PathBuf,
@@ -282,6 +373,10 @@ pub struct Workflow {
     pub steps: Vec<Step>,
     pub edges: Vec<Edge>,
     pub metadata: HashMap<String, String>,
+    /// Detected graph pattern for the overall workflow.
+    pub graph_pattern: GraphPattern,
+    /// Validation warnings from configuration checking.
+    pub validation_warnings: Vec<String>,
     parse_errors: Vec<String>,
 }
 
@@ -294,6 +389,8 @@ impl Workflow {
             steps: Vec::new(),
             edges: Vec::new(),
             metadata: HashMap::new(),
+            graph_pattern: GraphPattern::Unknown,
+            validation_warnings: Vec::new(),
             parse_errors: Vec::new(),
         }
     }
@@ -330,17 +427,26 @@ impl Workflow {
         !self.parse_errors.is_empty()
     }
 
-    /// Total number of top-level steps.
+    pub fn add_validation_warning(&mut self, warning: impl Into<String>) {
+        self.validation_warnings.push(warning.into());
+    }
+
+    pub fn validation_warnings(&self) -> &[String] {
+        &self.validation_warnings
+    }
+
+    pub fn has_validation_warnings(&self) -> bool {
+        !self.validation_warnings.is_empty()
+    }
+
     pub fn step_count(&self) -> usize {
         self.steps.len()
     }
 
-    /// Total number of steps including all nested children.
     pub fn total_step_count(&self) -> usize {
         self.steps.iter().map(|s| s.visible_count()).sum()
     }
 
-    /// Returns all steps flattened into a single list, respecting collapse state.
     pub fn flatten_steps(&self) -> Vec<FlatStep> {
         let mut result = Vec::new();
         for step in &self.steps {
@@ -361,6 +467,8 @@ impl Workflow {
             depth,
             has_children: !step.children.is_empty(),
             collapsed: step.collapsed,
+            duration: step.duration,
+            resources: step.resources.clone(),
         });
         if !step.collapsed {
             for child in &step.children {
@@ -369,7 +477,6 @@ impl Workflow {
         }
     }
 
-    /// Steps filtered to show only errors.
     pub fn error_steps(&self) -> Vec<FlatStep> {
         self.flatten_steps()
             .into_iter()
@@ -377,16 +484,48 @@ impl Workflow {
             .collect()
     }
 
-    /// Steps filtered to show only running.
     pub fn running_steps(&self) -> Vec<FlatStep> {
         self.flatten_steps()
             .into_iter()
             .filter(|s| matches!(s.status, Status::Running))
             .collect()
     }
+
+    /// Detect the overall graph pattern from edge topology.
+    pub fn detect_graph_pattern(&mut self) {
+        self.graph_pattern = Self::analyze_pattern(&self.edges);
+    }
+
+    fn analyze_pattern(edges: &[Edge]) -> GraphPattern {
+        if edges.is_empty() {
+            return GraphPattern::Unknown;
+        }
+
+        let mut in_degree: HashMap<String, usize> = HashMap::new();
+        let mut out_degree: HashMap<String, usize> = HashMap::new();
+
+        for edge in edges {
+            *out_degree.entry(edge.from.clone()).or_insert(0) += 1;
+            *in_degree.entry(edge.to.clone()).or_insert(0) += 1;
+        }
+
+        let fan_out_count = out_degree.values().filter(|&&d| d > 1).count();
+        let fan_in_count = in_degree.values().filter(|&&d| d > 1).count();
+
+        if fan_out_count > 0 && fan_in_count > 0 {
+            GraphPattern::Diamond
+        } else if fan_out_count > 0 {
+            GraphPattern::FanOut
+        } else if fan_in_count > 0 {
+            GraphPattern::FanIn
+        } else if edges.len() > 2 {
+            GraphPattern::Pipeline
+        } else {
+            GraphPattern::DAG
+        }
+    }
 }
 
-/// A flattened representation of a step for rendering.
 #[derive(Debug, Clone)]
 pub struct FlatStep {
     pub id: String,
@@ -399,9 +538,10 @@ pub struct FlatStep {
     pub depth: usize,
     pub has_children: bool,
     pub collapsed: bool,
+    pub duration: Option<Duration>,
+    pub resources: ResourceUsage,
 }
 
-/// Search filter for step names.
 #[derive(Debug, Clone, Default)]
 pub struct SearchFilter {
     pub query: Option<String>,
@@ -416,7 +556,6 @@ impl SearchFilter {
     }
 }
 
-/// Display filter mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FilterMode {
     All,

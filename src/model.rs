@@ -12,6 +12,8 @@ pub enum Framework {
     DSPy,
     AutoGen,
     Hermes,
+    OpenAI,
+    LlamaIndex,
     Generic,
     Unknown,
 }
@@ -24,6 +26,8 @@ impl fmt::Display for Framework {
             Framework::DSPy => write!(f, "DSPy"),
             Framework::AutoGen => write!(f, "AutoGen"),
             Framework::Hermes => write!(f, "Hermes Agent"),
+            Framework::OpenAI => write!(f, "OpenAI Agents"),
+            Framework::LlamaIndex => write!(f, "LlamaIndex"),
             Framework::Generic => write!(f, "Generic"),
             Framework::Unknown => write!(f, "Unknown"),
         }
@@ -38,6 +42,8 @@ impl Framework {
             Framework::DSPy,
             Framework::AutoGen,
             Framework::Hermes,
+            Framework::OpenAI,
+            Framework::LlamaIndex,
             Framework::Generic,
         ]
     }

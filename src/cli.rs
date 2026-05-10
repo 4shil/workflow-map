@@ -47,7 +47,7 @@ pub struct Cli {
     pub watch: bool,
 
     /// Force framework detection.
-    #[arg(short, long, value_parser = ["langchain", "crewai", "dspy", "autogen", "hermes", "generic"])]
+    #[arg(short, long, value_parser = ["langchain", "crewai", "dspy", "autogen", "hermes", "openai", "llamaindex", "generic"])]
     pub framework: Option<String>,
 
     /// Disable colored output.

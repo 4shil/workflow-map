@@ -5,6 +5,8 @@ pub mod dspy;
 pub mod generic;
 pub mod hermes;
 pub mod langchain;
+pub mod llamaindex;
+pub mod openai_agents;
 
 use crate::config::ParserConfig;
 use crate::model::Framework;
@@ -24,7 +26,11 @@ pub fn parse_workflow(
     }
 }
 
-fn parse_file(framework: Framework, config: &ParserConfig, path: &Path) -> Result<crate::model::Workflow> {
+fn parse_file(
+    framework: Framework,
+    config: &ParserConfig,
+    path: &Path,
+) -> Result<crate::model::Workflow> {
     let content = std::fs::read_to_string(path)?;
     let mut workflow = match framework {
         Framework::LangChain => langchain::parse(&content, path, config)?,
@@ -32,6 +38,8 @@ fn parse_file(framework: Framework, config: &ParserConfig, path: &Path) -> Resul
         Framework::DSPy => dspy::parse(&content, path, config)?,
         Framework::AutoGen => autogen::parse(&content, path, config)?,
         Framework::Hermes => hermes::parse(&content, path)?,
+        Framework::OpenAI => openai_agents::parse(&content, path)?,
+        Framework::LlamaIndex => llamaindex::parse(&content, path)?,
         Framework::Generic => generic::parse(&content, path)?,
         Framework::Unknown => anyhow::bail!("Cannot parse unknown framework"),
     };
@@ -47,13 +55,12 @@ fn parse_directory(
     let mut all_steps = Vec::new();
     let mut all_edges = Vec::new();
     let mut all_metadata = std::collections::HashMap::new();
-    let dir_name = dir.file_name()
+    let dir_name = dir
+        .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_else(|| "workflow".to_string());
 
-    let mut entries: Vec<_> = std::fs::read_dir(dir)?
-        .filter_map(|e| e.ok())
-        .collect();
+    let mut entries: Vec<_> = std::fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
     entries.sort_by_key(|e| e.file_name());
 
     for entry in &entries {
@@ -77,7 +84,8 @@ fn parse_directory(
                         Err(e) => {
                             // Create a synthetic error step for parse failures
                             use crate::model::*;
-                            let file_name = path.file_name()
+                            let file_name = path
+                                .file_name()
                                 .map(|n| n.to_string_lossy().to_string())
                                 .unwrap_or_default();
                             let error_step = Step::new(
@@ -91,7 +99,9 @@ fn parse_directory(
                             .with_error(ErrorDetail {
                                 message: format!("Failed to parse: {e}"),
                                 stack_trace: None,
-                                suggestion: Some("Check file format and framework type".to_string()),
+                                suggestion: Some(
+                                    "Check file format and framework type".to_string(),
+                                ),
                             });
                             all_steps.push(error_step);
                         }
@@ -116,6 +126,8 @@ pub fn parse_framework_name(name: &str) -> Option<Framework> {
         "dspy" => Some(Framework::DSPy),
         "autogen" | "pyautogen" => Some(Framework::AutoGen),
         "hermes" => Some(Framework::Hermes),
+        "openai" | "openai-agents" => Some(Framework::OpenAI),
+        "llamaindex" | "llama-index" => Some(Framework::LlamaIndex),
         "generic" => Some(Framework::Generic),
         _ => None,
     }

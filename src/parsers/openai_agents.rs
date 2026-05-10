@@ -4,7 +4,10 @@ use regex::Regex;
 use std::path::Path;
 
 fn line_at(content: &str, byte_offset: usize) -> usize {
-    content[..byte_offset.min(content.len())].lines().count().max(1)
+    content[..byte_offset.min(content.len())]
+        .lines()
+        .count()
+        .max(1)
 }
 
 pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
@@ -12,7 +15,7 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
         path.file_stem()
             .map(|s| s.to_string_lossy().to_string())
             .unwrap_or_else(|| "openai-agents".to_string()),
-        Framework::Generic, // Using Generic since we don't have a dedicated variant yet
+        Framework::OpenAI,
     );
 
     let mut step_counter = 0;
@@ -25,9 +28,13 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
             step_counter += 1;
             let line = line_at(content, mat.start());
             workflow.steps.push(
-                Step::new(format!("oa_agent_{step_counter}"), format!("agent_{step_counter}"), StepType::Agent)
-                    .with_source(SourceLocation::new(&path_str, line))
-                    .with_snippet(mat.as_str().trim().to_string()),
+                Step::new(
+                    format!("oa_agent_{step_counter}"),
+                    format!("agent_{step_counter}"),
+                    StepType::Agent,
+                )
+                .with_source(SourceLocation::new(&path_str, line))
+                .with_snippet(mat.as_str().trim().to_string()),
             );
         }
     }
@@ -39,9 +46,13 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
             step_counter += 1;
             let line = line_at(content, mat.start());
             workflow.steps.push(
-                Step::new(format!("oa_runner_{step_counter}"), format!("runner_{step_counter}"), StepType::Chain)
-                    .with_source(SourceLocation::new(&path_str, line))
-                    .with_snippet(mat.as_str().trim().to_string()),
+                Step::new(
+                    format!("oa_runner_{step_counter}"),
+                    format!("runner_{step_counter}"),
+                    StepType::Chain,
+                )
+                .with_source(SourceLocation::new(&path_str, line))
+                .with_snippet(mat.as_str().trim().to_string()),
             );
         }
     }
@@ -53,9 +64,13 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
             step_counter += 1;
             let line = line_at(content, mat.start());
             workflow.steps.push(
-                Step::new(format!("oa_handoff_{step_counter}"), format!("handoff_{step_counter}"), StepType::Chain)
-                    .with_source(SourceLocation::new(&path_str, line))
-                    .with_snippet(mat.as_str().trim().to_string()),
+                Step::new(
+                    format!("oa_handoff_{step_counter}"),
+                    format!("handoff_{step_counter}"),
+                    StepType::Chain,
+                )
+                .with_source(SourceLocation::new(&path_str, line))
+                .with_snippet(mat.as_str().trim().to_string()),
             );
         }
     }
@@ -67,9 +82,13 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
             step_counter += 1;
             let line = line_at(content, mat.start());
             workflow.steps.push(
-                Step::new(format!("oa_tool_{step_counter}"), format!("tool_{step_counter}"), StepType::Tool)
-                    .with_source(SourceLocation::new(&path_str, line))
-                    .with_snippet(mat.as_str().trim().to_string()),
+                Step::new(
+                    format!("oa_tool_{step_counter}"),
+                    format!("tool_{step_counter}"),
+                    StepType::Tool,
+                )
+                .with_source(SourceLocation::new(&path_str, line))
+                .with_snippet(mat.as_str().trim().to_string()),
             );
         }
     }

@@ -50,6 +50,10 @@ pub struct Cli {
     #[arg(short, long)]
     pub watch: bool,
 
+    /// Disable parse cache.
+    #[arg(long)]
+    pub no_cache: bool,
+
     /// Force framework detection.
     #[arg(short, long, value_parser = ["langchain", "crewai", "dspy", "autogen", "hermes", "openai", "llamaindex", "generic"])]
     pub framework: Option<String>,

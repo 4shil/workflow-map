@@ -44,6 +44,9 @@ workflow-map ./workflow.yaml --format json --graph dot --output workflow.dot
 # Mermaid export
 workflow-map ./workflow.yaml --format json --graph mermaid --output workflow.mmd
 
+# Disable cache
+workflow-map ./workflow.yaml --no-cache
+
 # Remote URL
 workflow-map https://raw.githubusercontent.com/org/repo/main/workflow.yaml
 

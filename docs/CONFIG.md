@@ -43,6 +43,7 @@ default_export_format = "text"
 |-----|------|---------|-------------|
 | `use_regex_parser` | bool | `true` | Use regex-based Python parsing (v1). Set to `false` when tree-sitter is added. |
 | `max_parse_errors` | usize | `50` | Maximum number of parse errors before the parser stops. |
+| `disable_cache` | bool | `false` | Disable in-memory parse caching. |
 
 ## Render Configuration
 
@@ -86,6 +87,7 @@ All config file values can be overridden by CLI flags:
 | All | `--no-config` to ignore config file |
 | N/A | `--config <path>` for custom config path |
 | N/A | `--refresh` to re-download remote URLs |
+| `parsers.disable_cache` | `--no-cache` |
 | `render.respect_no_color` | `--no-color` |
 | `default_export_format` | `--format <format>` |
 | `watch.debounce_ms` | N/A (config only) |

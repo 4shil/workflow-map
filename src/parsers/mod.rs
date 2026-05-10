@@ -8,10 +8,15 @@ pub mod langchain;
 pub mod llamaindex;
 pub mod openai_agents;
 
+use crate::cache::{file_mtime, WorkflowCache};
 use crate::config::ParserConfig;
 use crate::model::Framework;
 use anyhow::Result;
 use std::path::Path;
+use std::sync::Mutex;
+
+static CACHE: once_cell::sync::Lazy<Mutex<WorkflowCache>> =
+    once_cell::sync::Lazy::new(|| Mutex::new(WorkflowCache::new()));
 
 /// Parse a workflow file/directory into a unified model.
 pub fn parse_workflow(
@@ -31,6 +36,15 @@ fn parse_file(
     config: &ParserConfig,
     path: &Path,
 ) -> Result<crate::model::Workflow> {
+    let modified = file_mtime(path).unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+    if !config.disable_cache {
+        if let Ok(cache) = CACHE.lock() {
+            if let Some(workflow) = cache.get(path, modified) {
+                return Ok(workflow);
+            }
+        }
+    }
+
     let content = std::fs::read_to_string(path)?;
     let mut workflow = match framework {
         Framework::LangChain => langchain::parse(&content, path, config)?,
@@ -44,6 +58,13 @@ fn parse_file(
         Framework::Unknown => anyhow::bail!("Cannot parse unknown framework"),
     };
     workflow.source_path = path.to_path_buf();
+
+    if !config.disable_cache {
+        if let Ok(mut cache) = CACHE.lock() {
+            cache.insert(path.to_path_buf(), modified, workflow.clone());
+        }
+    }
+
     Ok(workflow)
 }
 

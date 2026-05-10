@@ -11,6 +11,10 @@ pub struct ParserConfig {
     /// Maximum number of parse errors before aborting.
     #[serde(default = "default_max_errors")]
     pub max_parse_errors: usize,
+
+    /// Disable parse cache.
+    #[serde(default = "default_false")]
+    pub disable_cache: bool,
 }
 
 impl Default for ParserConfig {
@@ -18,6 +22,7 @@ impl Default for ParserConfig {
         Self {
             use_regex_parser: true,
             max_parse_errors: 50,
+            disable_cache: false,
         }
     }
 }
@@ -80,9 +85,7 @@ pub struct WatchConfig {
 
 impl Default for WatchConfig {
     fn default() -> Self {
-        Self {
-            debounce_ms: 500,
-        }
+        Self { debounce_ms: 500 }
     }
 }
 
@@ -140,6 +143,10 @@ fn default_true() -> bool {
 
 fn default_max_errors() -> usize {
     50
+}
+
+fn default_false() -> bool {
+    false
 }
 
 fn default_color_scheme() -> String {

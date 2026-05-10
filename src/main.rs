@@ -25,15 +25,20 @@ fn main() -> Result<()> {
         path = cached;
     }
 
+    let mut parser_config = config.parsers.clone();
+    if cli.no_cache {
+        parser_config.disable_cache = true;
+    }
+
     let framework = if let Some(fw) = &cli.framework {
         workflow_map::parsers::parse_framework_name(fw)
             .with_context(|| format!("Unknown framework: {fw}"))?
     } else {
-        detect_framework(&config.parsers, &path)
+        detect_framework(&parser_config, &path)
             .with_context(|| format!("Cannot detect framework for: {}", path.display()))?
     };
 
-    let workflow = parse_workflow(framework, &config.parsers, &path)
+    let workflow = parse_workflow(framework, &parser_config, &path)
         .with_context(|| format!("Failed to parse workflow from: {}", path.display()))?;
 
     if workflow.has_parse_errors() {

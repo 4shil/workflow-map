@@ -4,6 +4,7 @@
 #![allow(clippy::redundant_closure_call)]
 #![allow(clippy::derivable_impls)]
 
+pub mod cache;
 pub mod cli;
 pub mod config;
 pub mod export;

@@ -1,0 +1,23 @@
+name: "Parallel Workflow"
+steps:
+  - id: a
+    name: "Task A"
+    type: task
+    depends_on: []
+  - id: b
+    name: "Task B"
+    type: task
+    depends_on: []
+  - id: c
+    name: "Merge Results"
+    type: step
+    depends_on:
+      - a
+      - b
+edges:
+  - from: a
+    to: c
+    type: parallel
+  - from: b
+    to: c
+    type: parallel

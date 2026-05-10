@@ -4,13 +4,9 @@
 //! filtering, pagination, and renders an interactive ASCII workflow diagram.
 
 use crate::config::AppConfig;
-use crate::model::{
-    FilterMode, FlatStep, SearchFilter, Status, Workflow,
-};
+use crate::model::{FilterMode, FlatStep, SearchFilter, Status, Workflow};
 use anyhow::Result;
-use crossterm::event::{
-    self, Event, KeyCode, KeyModifiers,
-};
+use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},

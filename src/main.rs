@@ -1,24 +1,16 @@
-mod cli;
-mod config;
-mod export;
-mod model;
-mod parsers;
-mod renderer;
-
 use anyhow::{Context, Result};
-use clap::Parser;
+use clap::Parser as ClapParser;
 use std::path::PathBuf;
 
-use cli::{Cli, OutputFormat};
-use config::AppConfig;
-use export::Exporter;
-use parsers::{detect_framework, parse_workflow};
-use renderer::TuiApp;
+use workflow_map::cli::{Cli, OutputFormat};
+use workflow_map::config::AppConfig;
+use workflow_map::export::Exporter;
+use workflow_map::parsers::{detect_framework, parse_workflow};
+use workflow_map::renderer::TuiApp;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    // Load config file (if it exists and --no-config is not set)
     let config = if cli.no_config {
         AppConfig::default()
     } else {
@@ -27,9 +19,8 @@ fn main() -> Result<()> {
 
     let path = PathBuf::from(&cli.path);
 
-    // Parse the workflow
     let framework = if let Some(fw) = &cli.framework {
-        parsers::parse_framework_name(fw)
+        workflow_map::parsers::parse_framework_name(fw)
             .with_context(|| format!("Unknown framework: {fw}"))?
     } else {
         detect_framework(&config.parsers, &path)
@@ -39,7 +30,6 @@ fn main() -> Result<()> {
     let workflow = parse_workflow(framework, &config.parsers, &path)
         .with_context(|| format!("Failed to parse workflow from: {}", path.display()))?;
 
-    // Report parse errors to stderr but continue
     if workflow.has_parse_errors() {
         for err in workflow.parse_errors() {
             eprintln!("[parse warning] {err}");

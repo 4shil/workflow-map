@@ -1,0 +1,19 @@
+name: "Simple Pipeline"
+description: "A simple data pipeline"
+steps:
+  - id: load
+    name: "Load Data"
+    type: tool
+    description: "Load data from CSV"
+    depends_on: []
+  - id: transform
+    name: "Transform"
+    type: agent
+    description: "Transform data"
+    depends_on:
+      - load
+  - id: save
+    name: "Save Results"
+    type: tool
+    depends_on:
+      - transform

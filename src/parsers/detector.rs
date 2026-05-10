@@ -34,7 +34,8 @@ pub fn detect_file(_config: &ParserConfig, path: &Path) -> Option<Framework> {
         "yaml" | "yml" => detect_yaml_framework(&content),
         "json" => Some(Framework::Generic),
         "md" => {
-            if path.file_name()?.to_str()? == "SKILL.md" {
+            let fname = path.file_name()?.to_str()?.to_lowercase();
+            if fname == "skill.md" || fname.ends_with("_skill.md") {
                 Some(Framework::Hermes)
             } else {
                 None

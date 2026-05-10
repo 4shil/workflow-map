@@ -1,0 +1,8 @@
+{
+  "name": "JSON Workflow",
+  "description": "A workflow defined in JSON",
+  "steps": [
+    {"id": "step1", "name": "First Step", "type": "step"},
+    {"id": "step2", "name": "Second Step", "type": "step", "depends_on": ["step1"]}
+  ]
+}

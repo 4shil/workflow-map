@@ -21,14 +21,19 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
         Framework::Generic,
     );
 
-    // Try YAML first, then JSON
+    // Try YAML first, then JSON. If both fail, report parse error but return workflow.
     let value: serde_yaml::Value = if path.extension().map(|e| e == "json").unwrap_or(false) {
         serde_json::from_str(content)
             .or_else(|_| serde_yaml::from_str(content))
             .map_err(|e| anyhow::anyhow!("Failed to parse as JSON/YAML: {e}"))?
     } else {
-        serde_yaml::from_str(content)
-            .map_err(|e| anyhow::anyhow!("Failed to parse as YAML: {e}"))?
+        match serde_yaml::from_str(content) {
+            Ok(v) => v,
+            Err(e) => {
+                workflow.add_parse_error(format!("YAML parse error (not a workflow file?): {e}"));
+                return Ok(workflow);
+            }
+        }
     };
 
     // Extract name

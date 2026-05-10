@@ -1,0 +1,23 @@
+agents:
+  researcher:
+    role: "Senior Data Researcher"
+    goal: "Find and analyze data"
+    backstory: "Expert researcher with 10 years experience"
+  analyst:
+    role: "Data Analyst"
+    goal: "Analyze and visualize data"
+    backstory: "Expert in data analysis"
+
+tasks:
+  research_task:
+    description: "Research the given topic thoroughly"
+    agent: researcher
+    expected_output: "Detailed research notes"
+  analysis_task:
+    description: "Analyze the research findings"
+    agent: analyst
+    context:
+      - research_task
+    expected_output: "Analysis report with charts"
+
+process: sequential

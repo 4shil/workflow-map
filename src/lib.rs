@@ -9,4 +9,5 @@ pub mod config;
 pub mod export;
 pub mod model;
 pub mod parsers;
+pub mod remote;
 pub mod renderer;

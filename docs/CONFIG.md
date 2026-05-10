@@ -85,6 +85,7 @@ All config file values can be overridden by CLI flags:
 |------------|----------|
 | All | `--no-config` to ignore config file |
 | N/A | `--config <path>` for custom config path |
+| N/A | `--refresh` to re-download remote URLs |
 | `render.respect_no_color` | `--no-color` |
 | `default_export_format` | `--format <format>` |
 | `watch.debounce_ms` | N/A (config only) |

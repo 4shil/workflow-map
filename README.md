@@ -44,6 +44,9 @@ workflow-map ./workflow.yaml --format json --graph dot --output workflow.dot
 # Mermaid export
 workflow-map ./workflow.yaml --format json --graph mermaid --output workflow.mmd
 
+# Remote URL
+workflow-map https://raw.githubusercontent.com/org/repo/main/workflow.yaml
+
 # Watch mode
 workflow-map ./my_workflow.yaml --watch
 ```

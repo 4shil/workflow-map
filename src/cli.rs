@@ -65,4 +65,8 @@ pub struct Cli {
     /// Custom config file path.
     #[arg(long)]
     pub config: Option<String>,
+
+    /// Refresh remote cache.
+    #[arg(long)]
+    pub refresh: bool,
 }

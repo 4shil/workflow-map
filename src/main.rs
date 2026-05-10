@@ -6,6 +6,7 @@ use workflow_map::cli::{Cli, OutputFormat};
 use workflow_map::config::AppConfig;
 use workflow_map::export::Exporter;
 use workflow_map::parsers::{detect_framework, parse_workflow};
+use workflow_map::remote::{fetch_to_cache, is_remote_path};
 use workflow_map::renderer::TuiApp;
 
 fn main() -> Result<()> {
@@ -17,7 +18,12 @@ fn main() -> Result<()> {
         AppConfig::load().unwrap_or_default()
     };
 
-    let path = PathBuf::from(&cli.path);
+    let mut path = PathBuf::from(&cli.path);
+
+    if is_remote_path(&cli.path) {
+        let cached = fetch_to_cache(&cli.path, cli.refresh)?;
+        path = cached;
+    }
 
     let framework = if let Some(fw) = &cli.framework {
         workflow_map::parsers::parse_framework_name(fw)

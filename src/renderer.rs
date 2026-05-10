@@ -189,7 +189,14 @@ impl TuiApp {
             let fail_mark = if step.status.is_error() { "*" } else { " " };
             lines.push(format!(
                 "{} {} {}{}[{}] {} ({}#{})",
-                cursor_mark, fail_mark, indent, collapse, marker, step.name, step.step_type, step.id
+                cursor_mark,
+                fail_mark,
+                indent,
+                collapse,
+                marker,
+                step.name,
+                step.step_type,
+                step.id
             ));
             if let Some(ref err) = step.error {
                 lines.push(format!("      Error: {}", err.message));
@@ -285,9 +292,7 @@ impl TuiApp {
             }
             KeyCode::PageDown => {
                 let filtered = self.filtered_steps();
-                self.cursor = (self.cursor + PAGE_SIZE).min(
-                    filtered.len().saturating_sub(1),
-                );
+                self.cursor = (self.cursor + PAGE_SIZE).min(filtered.len().saturating_sub(1));
             }
             KeyCode::Home => {
                 self.cursor = 0;
@@ -327,11 +332,7 @@ impl TuiApp {
             // Enter search mode
             KeyCode::Char('/') => {
                 self.search_mode = true;
-                self.search_buffer = self
-                    .search
-                    .query
-                    .clone()
-                    .unwrap_or_default();
+                self.search_buffer = self.search.query.clone().unwrap_or_default();
             }
 
             // Export
@@ -378,11 +379,7 @@ impl TuiApp {
     }
 
     /// Recursively find a step by id and set its collapsed state.
-    fn set_collapse_recursive(
-        steps: &mut [crate::model::Step],
-        id: &str,
-        collapsed: bool,
-    ) -> bool {
+    fn set_collapse_recursive(steps: &mut [crate::model::Step], id: &str, collapsed: bool) -> bool {
         for step in steps.iter_mut() {
             if step.id == *id {
                 step.set_collapse(collapsed);
@@ -411,9 +408,9 @@ impl TuiApp {
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
-                Constraint::Length(1),  // title
-                Constraint::Min(2),     // content area
-                Constraint::Length(1),  // status bar
+                Constraint::Length(1), // title
+                Constraint::Min(2),    // content area
+                Constraint::Length(1), // status bar
             ])
             .split(size);
 
@@ -463,10 +460,7 @@ impl TuiApp {
             if selected < filtered.len() {
                 let chunks = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints([
-                        Constraint::Percentage(60),
-                        Constraint::Percentage(40),
-                    ])
+                    .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
                     .split(content_area);
 
                 self.draw_steps_list(frame, chunks[0], &filtered, viewport_height);
@@ -524,10 +518,7 @@ impl TuiApp {
             let max_name_width = (area.width as usize)
                 .saturating_sub(20 + indent.len() + collapse.len() + 3 + marker.len() + 3 + 1);
             let name_display = if step.name.len() > max_name_width {
-                format!(
-                    "{}…",
-                    &step.name[..max_name_width.saturating_sub(1).max(1)]
-                )
+                format!("{}…", &step.name[..max_name_width.saturating_sub(1).max(1)])
             } else {
                 step.name.clone()
             };
@@ -569,12 +560,7 @@ impl TuiApp {
     }
 
     /// Draw the detail panel for the selected step.
-    fn draw_detail_panel(
-        &self,
-        frame: &mut Frame<'_>,
-        area: Rect,
-        step: &FlatStep,
-    ) {
+    fn draw_detail_panel(&self, frame: &mut Frame<'_>, area: Rect, step: &FlatStep) {
         let mut lines: Vec<Line> = Vec::new();
 
         // Step name and type
@@ -609,6 +595,20 @@ impl TuiApp {
             Span::styled(step.status.marker(), status_style),
         ]));
 
+        if let Some(duration) = step.duration {
+            lines.push(Line::from(Span::styled(
+                format!("  Duration: {:?}", duration),
+                Style::default().fg(Color::Yellow),
+            )));
+        }
+
+        if step.resources.total_tokens() > 0 || step.resources.api_calls.is_some() {
+            lines.push(Line::from(Span::styled(
+                format!("  Resources: {}", step.resources),
+                Style::default().fg(Color::Yellow),
+            )));
+        }
+
         // Config snippet (up to 6 lines)
         if !step.config_snippet.is_empty() {
             lines.push(Line::from(Span::styled(
@@ -620,10 +620,7 @@ impl TuiApp {
             for snippet_line in step.config_snippet.lines().take(6) {
                 let max_width = (area.width as usize).saturating_sub(6);
                 let truncated = if snippet_line.len() > max_width {
-                    format!(
-                        "{}…",
-                        &snippet_line[..max_width.saturating_sub(1).max(1)]
-                    )
+                    format!("{}…", &snippet_line[..max_width.saturating_sub(1).max(1)])
                 } else {
                     snippet_line.to_string()
                 };
@@ -640,8 +637,7 @@ impl TuiApp {
                 "  Error:",
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
             )));
-            let err_text =
-                self.wrap_text(&err.message, area.width.saturating_sub(6) as usize);
+            let err_text = self.wrap_text(&err.message, area.width.saturating_sub(6) as usize);
             for err_line in err_text {
                 lines.push(Line::from(Span::styled(
                     format!("    {err_line}"),
@@ -655,8 +651,7 @@ impl TuiApp {
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD),
                 )));
-                let sug_text =
-                    self.wrap_text(suggestion, area.width.saturating_sub(6) as usize);
+                let sug_text = self.wrap_text(suggestion, area.width.saturating_sub(6) as usize);
                 for sug_line in sug_text {
                     lines.push(Line::from(Span::styled(
                         format!("    {sug_line}"),
@@ -667,11 +662,7 @@ impl TuiApp {
         }
 
         let paragraph = Paragraph::new(Text::from(lines))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" Detail "),
-            )
+            .block(Block::default().borders(Borders::ALL).title(" Detail "))
             .wrap(Wrap { trim: true });
 
         frame.render_widget(paragraph, area);
@@ -708,15 +699,11 @@ impl TuiApp {
         let status_text = if self.search_mode {
             format!(" / {}", self.search_buffer)
         } else {
-            " [q] Quit  [f] Filter  [/] Search  [e] Export  [r] Reload  [?] Help "
-                .to_string()
+            " [q] Quit  [f] Filter  [/] Search  [e] Export  [r] Reload  [?] Help ".to_string()
         };
 
-        let status = Paragraph::new(status_text).style(
-            Style::default()
-                .fg(Color::White)
-                .bg(Color::Blue),
-        );
+        let status =
+            Paragraph::new(status_text).style(Style::default().fg(Color::White).bg(Color::Blue));
 
         frame.render_widget(status, area);
     }
@@ -776,13 +763,12 @@ impl TuiApp {
             Style::default().fg(Color::DarkGray),
         )));
 
-        let help = Paragraph::new(Text::from(lines))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(" Help ")
-                    .style(Style::default().fg(Color::White).bg(Color::Black)),
-            );
+        let help = Paragraph::new(Text::from(lines)).block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Help ")
+                .style(Style::default().fg(Color::White).bg(Color::Black)),
+        );
         frame.render_widget(help, popup_area);
     }
 

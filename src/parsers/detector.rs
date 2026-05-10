@@ -77,6 +77,26 @@ fn detect_python_framework(content: &str) -> Option<Framework> {
         return Some(Framework::AutoGen);
     }
 
+    // Check for OpenAI Agents SDK patterns
+    if content.contains("openai")
+        && (content.contains("Agent(")
+            || content.contains("Runner(")
+            || content.contains("handoff(")
+            || content.contains("function_tool("))
+    {
+        return Some(Framework::OpenAI);
+    }
+
+    // Check for LlamaIndex workflow patterns
+    if content.contains("llama_index")
+        && (content.contains("Workflow(")
+            || content.contains("WorkflowStep")
+            || content.contains("WorkflowRunner")
+            || content.contains("QueryEngine"))
+    {
+        return Some(Framework::LlamaIndex);
+    }
+
     None
 }
 
@@ -125,6 +145,27 @@ from autogen import AssistantAgent, UserProxyAgent
 agent = AssistantAgent("assistant", llm_config={})
 "#;
         assert_eq!(detect_python_framework(content), Some(Framework::AutoGen));
+    }
+
+    #[test]
+    fn test_detect_openai_agents() {
+        let content = r#"
+from openai import Agent
+assistant = Agent(name="Helper", instructions="Be helpful")
+"#;
+        assert_eq!(detect_python_framework(content), Some(Framework::OpenAI));
+    }
+
+    #[test]
+    fn test_detect_llamaindex() {
+        let content = r#"
+from llama_index.core.workflow import Workflow
+flow = Workflow()
+"#;
+        assert_eq!(
+            detect_python_framework(content),
+            Some(Framework::LlamaIndex)
+        );
     }
 
     #[test]

@@ -89,7 +89,7 @@ Indentation: 2 spaces per nesting depth.
 | `Enter` | Toggle detail view |
 | `f` | Cycle filter mode |
 | `/` | Enter search mode |
-| `e` | Export current view |
+| `e` | Export current view (toast confirmation) |
 | `r` | Trigger reload |
 | `?` / `h` | Toggle help |
 | `PageUp` / `PageDown` | Scroll by 10 |

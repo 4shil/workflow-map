@@ -52,6 +52,10 @@ pub struct TuiApp {
     export_requested: bool,
     /// Flag indicating reload was requested.
     reload_requested: bool,
+    /// Optional status toast message.
+    toast: Option<String>,
+    /// Countdown for toast display frames.
+    toast_ticks: u8,
 }
 
 impl TuiApp {
@@ -72,6 +76,8 @@ impl TuiApp {
             should_quit: false,
             export_requested: false,
             reload_requested: false,
+            toast: None,
+            toast_ticks: 0,
         }
     }
 
@@ -138,6 +144,13 @@ impl TuiApp {
                 self.export_requested = false;
             }
 
+            if self.toast_ticks > 0 {
+                self.toast_ticks = self.toast_ticks.saturating_sub(1);
+                if self.toast_ticks == 0 {
+                    self.toast = None;
+                }
+            }
+
             // Poll for key events with a short timeout so we can update the display
             if event::poll(Duration::from_millis(200))? {
                 if let Event::Key(key) = event::read()? {
@@ -162,7 +175,7 @@ impl TuiApp {
     }
 
     /// Export the current view to the default export path.
-    fn export_current_view(&self) -> Result<()> {
+    fn export_current_view(&mut self) -> Result<()> {
         // Build a text representation of the currently visible steps
         let filtered = self.filtered_steps();
         let mut lines: Vec<String> = Vec::new();
@@ -231,6 +244,10 @@ impl TuiApp {
         };
 
         std::fs::write(&export_path, output)?;
+
+        self.toast = Some(format!("Exported to {}", export_path.display()));
+        self.toast_ticks = 10;
+
         Ok(())
     }
 
@@ -698,6 +715,8 @@ impl TuiApp {
     fn draw_status_bar(&self, frame: &mut Frame<'_>, area: Rect) {
         let status_text = if self.search_mode {
             format!(" / {}", self.search_buffer)
+        } else if let Some(ref toast) = self.toast {
+            format!(" {toast} ")
         } else {
             " [q] Quit  [f] Filter  [/] Search  [e] Export  [r] Reload  [?] Help ".to_string()
         };

@@ -43,7 +43,9 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
 
     // Extract optional description
     if let Some(desc) = value.get("description").and_then(|v| v.as_str()) {
-        workflow.metadata.insert("description".to_string(), desc.to_string());
+        workflow
+            .metadata
+            .insert("description".to_string(), desc.to_string());
     }
 
     // Extract steps
@@ -89,7 +91,10 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
                 .unwrap_or("");
 
             let step = Step::new(&id, &name, step_type)
-                .with_source(SourceLocation::new(path.to_string_lossy().to_string(), i + 1))
+                .with_source(SourceLocation::new(
+                    path.to_string_lossy().to_string(),
+                    i + 1,
+                ))
                 .with_snippet(if description.is_empty() {
                     format!("{id}: {name}")
                 } else {
@@ -114,19 +119,16 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
                     Some("parallel") => EdgeType::Parallel,
                     _ => EdgeType::Sequential,
                 };
-                workflow.edges.push(
-                    Edge::new(from, to).with_type(et),
-                );
+                workflow.edges.push(Edge::new(from, to).with_type(et));
             }
         }
     } else {
         // Auto-infer edges from depends_on
         for step in &workflow.steps {
             for dep in &step.dependencies {
-                workflow.edges.push(
-                    Edge::new(dep.clone(), step.id.clone())
-                        .with_type(EdgeType::Sequential),
-                );
+                workflow
+                    .edges
+                    .push(Edge::new(dep.clone(), step.id.clone()).with_type(EdgeType::Sequential));
             }
         }
     }
@@ -213,7 +215,10 @@ edges:
         let path = std::path::Path::new("workflow.yaml");
         let w = parse(content, path).unwrap();
         assert_eq!(w.edges.len(), 2);
-        assert!(w.edges.iter().all(|e| matches!(e.edge_type, EdgeType::Parallel)));
+        assert!(w
+            .edges
+            .iter()
+            .all(|e| matches!(e.edge_type, EdgeType::Parallel)));
     }
 
     #[test]

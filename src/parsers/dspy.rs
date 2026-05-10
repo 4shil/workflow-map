@@ -5,7 +5,10 @@ use regex::Regex;
 use std::path::Path;
 
 fn line_at(content: &str, byte_offset: usize) -> usize {
-    content[..byte_offset.min(content.len())].lines().count().max(1)
+    content[..byte_offset.min(content.len())]
+        .lines()
+        .count()
+        .max(1)
 }
 
 pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workflow> {
@@ -19,9 +22,7 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
     let mut step_counter = 0;
     let path_str = path.to_string_lossy().to_string();
 
-    let module_re = Regex::new(
-        r"(?m)class\s+(\w+)\s*\(\s*dspy\.Module\s*\)",
-    ).ok();
+    let module_re = Regex::new(r"(?m)class\s+(\w+)\s*\(\s*dspy\.Module\s*\)").ok();
 
     if let Some(ref re) = module_re {
         for mat in re.find_iter(content) {
@@ -49,9 +50,8 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
         }
     }
 
-    let predict_re = Regex::new(
-        r"(?m)\s*(\w+)\s*=\s*dspy\.(Predict|ChainOfThought|Retrieve)\s*\(",
-    ).ok();
+    let predict_re =
+        Regex::new(r"(?m)\s*(\w+)\s*=\s*dspy\.(Predict|ChainOfThought|Retrieve)\s*\(").ok();
 
     if let Some(ref re) = predict_re {
         for mat in re.find_iter(content) {
@@ -85,9 +85,13 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
             step_counter += 1;
             let line = line_at(content, mat.start());
             workflow.steps.push(
-                Step::new(format!("dspy_cond_{step_counter}"), "Conditional branch".to_string(), StepType::Conditional)
-                    .with_source(SourceLocation::new(&path_str, line))
-                    .with_snippet(mat.as_str().trim().to_string()),
+                Step::new(
+                    format!("dspy_cond_{step_counter}"),
+                    "Conditional branch".to_string(),
+                    StepType::Conditional,
+                )
+                .with_source(SourceLocation::new(&path_str, line))
+                .with_snippet(mat.as_str().trim().to_string()),
             );
         }
     }
@@ -99,9 +103,13 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
             step_counter += 1;
             let line = line_at(content, mat.start());
             workflow.steps.push(
-                Step::new(format!("dspy_loop_{step_counter}"), "Loop".to_string(), StepType::Loop)
-                    .with_source(SourceLocation::new(&path_str, line))
-                    .with_snippet(mat.as_str().trim().to_string()),
+                Step::new(
+                    format!("dspy_loop_{step_counter}"),
+                    "Loop".to_string(),
+                    StepType::Loop,
+                )
+                .with_source(SourceLocation::new(&path_str, line))
+                .with_snippet(mat.as_str().trim().to_string()),
             );
         }
     }
@@ -141,12 +149,18 @@ fn parse_dspy_forward(content: &str, _path: &Path, path_str: &str) -> Vec<Step> 
         for (i, mat) in re.find_iter(content).enumerate() {
             let captures = re.captures(mat.as_str()).unwrap();
             let method_name = captures.get(1).map(|m| m.as_str()).unwrap_or("call");
-            if method_name == "forward" { continue; }
+            if method_name == "forward" {
+                continue;
+            }
             let line = line_at(content, mat.start());
             steps.push(
-                Step::new(format!("dspy_sub_{i}"), method_name.to_string(), StepType::Predict)
-                    .with_source(SourceLocation::new(path_str, line))
-                    .with_snippet(format!("self.{method_name}(...)")),
+                Step::new(
+                    format!("dspy_sub_{i}"),
+                    method_name.to_string(),
+                    StepType::Predict,
+                )
+                .with_source(SourceLocation::new(path_str, line))
+                .with_snippet(format!("self.{method_name}(...)")),
             );
         }
     }
@@ -159,7 +173,8 @@ mod tests {
 
     #[test]
     fn test_parse_dspy_module() {
-        let content = "import dspy\n\nclass RAG(dspy.Module):\n    def forward(self, q):\n        pass\n";
+        let content =
+            "import dspy\n\nclass RAG(dspy.Module):\n    def forward(self, q):\n        pass\n";
         let path = std::path::Path::new("test.py");
         let w = parse(content, path, &ParserConfig::default()).unwrap();
         assert!(!w.steps.is_empty());
@@ -181,6 +196,9 @@ mod tests {
         let content = "if x > 0:\n    qa = dspy.Predict(\"q -> a\")\n";
         let path = std::path::Path::new("test.py");
         let w = parse(content, path, &ParserConfig::default()).unwrap();
-        assert!(w.steps.iter().any(|s| matches!(s.step_type, StepType::Conditional)));
+        assert!(w
+            .steps
+            .iter()
+            .any(|s| matches!(s.step_type, StepType::Conditional)));
     }
 }

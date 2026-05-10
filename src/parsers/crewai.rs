@@ -26,9 +26,7 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
         for (key, val) in agents {
             step_id += 1;
             let agent_name = key.as_str().unwrap_or("unknown");
-            let role = val.get("role")
-                .and_then(|r| r.as_str())
-                .unwrap_or("");
+            let role = val.get("role").and_then(|r| r.as_str()).unwrap_or("");
 
             let mut step = Step::new(
                 format!("crew_agent_{step_id}"),
@@ -44,7 +42,8 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
                     .iter()
                     .enumerate()
                     .map(|(i, tool)| {
-                        let tool_name = tool.as_str()
+                        let tool_name = tool
+                            .as_str()
                             .or_else(|| tool.as_mapping().and_then(|m| m.keys().next()?.as_str()))
                             .unwrap_or("tool");
                         Step::new(
@@ -67,14 +66,17 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
         for (key, val) in tasks {
             step_id += 1;
             let task_name = key.as_str().unwrap_or("unknown");
-            let description = val.get("description")
+            let description = val
+                .get("description")
                 .and_then(|d| d.as_str())
                 .unwrap_or("");
-            let agent = val.get("agent")
+            let agent = val
+                .get("agent")
                 .and_then(|a| a.as_str())
                 .unwrap_or("unassigned");
 
-            let deps: Vec<String> = val.get("context")
+            let deps: Vec<String> = val
+                .get("context")
                 .and_then(|c| c.as_sequence())
                 .map(|seq| {
                     seq.iter()
@@ -96,17 +98,23 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
 
             // Create edges from agent to task
             workflow.edges.push(
-                Edge::new(format!("crew_agent_{step_id}"), format!("crew_task_{step_id}"))
-                    .with_type(EdgeType::Sequential),
+                Edge::new(
+                    format!("crew_agent_{step_id}"),
+                    format!("crew_task_{step_id}"),
+                )
+                .with_type(EdgeType::Sequential),
             );
         }
     }
 
     // Detect process type
-    let process_type = yaml.get("process")
+    let process_type = yaml
+        .get("process")
         .and_then(|p| p.as_str())
         .unwrap_or("sequential");
-    workflow.metadata.insert("process".to_string(), process_type.to_string());
+    workflow
+        .metadata
+        .insert("process".to_string(), process_type.to_string());
 
     if workflow.steps.is_empty() {
         workflow.add_parse_error("No agents or tasks found in CrewAI config");

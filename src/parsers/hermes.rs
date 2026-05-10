@@ -18,13 +18,19 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
     // Parse frontmatter fields
     if let Some(name) = frontmatter.get("name").and_then(|v| v.as_str()) {
         workflow.name = name.to_string();
-        workflow.metadata.insert("name".to_string(), name.to_string());
+        workflow
+            .metadata
+            .insert("name".to_string(), name.to_string());
     }
     if let Some(desc) = frontmatter.get("description").and_then(|v| v.as_str()) {
-        workflow.metadata.insert("description".to_string(), desc.to_string());
+        workflow
+            .metadata
+            .insert("description".to_string(), desc.to_string());
     }
     if let Some(cat) = frontmatter.get("category").and_then(|v| v.as_str()) {
-        workflow.metadata.insert("category".to_string(), cat.to_string());
+        workflow
+            .metadata
+            .insert("category".to_string(), cat.to_string());
     }
 
     // Parse body sections (## headers become steps)
@@ -120,8 +126,8 @@ fn extract_frontmatter(content: &str) -> (serde_yaml::Mapping, String) {
             let yaml_content = lines[1..end].join("\n");
             let body = lines[end + 1..].join("\n");
 
-            let frontmatter = serde_yaml::from_str(&yaml_content)
-                .unwrap_or_else(|_| serde_yaml::Mapping::new());
+            let frontmatter =
+                serde_yaml::from_str(&yaml_content).unwrap_or_else(|_| serde_yaml::Mapping::new());
 
             (frontmatter, body)
         }

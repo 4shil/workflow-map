@@ -5,7 +5,10 @@ use regex::Regex;
 use std::path::Path;
 
 fn line_at(content: &str, byte_offset: usize) -> usize {
-    content[..byte_offset.min(content.len())].lines().count().max(1)
+    content[..byte_offset.min(content.len())]
+        .lines()
+        .count()
+        .max(1)
 }
 
 pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workflow> {
@@ -30,9 +33,13 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
             let line = line_at(content, mat.start());
 
             workflow.steps.push(
-                Step::new(format!("ag_agent_{step_counter}"), format!("{var_name} (AssistantAgent)"), StepType::Agent)
-                    .with_source(SourceLocation::new(&path_str, line))
-                    .with_snippet(format!("{var_name} = AssistantAgent(...)")),
+                Step::new(
+                    format!("ag_agent_{step_counter}"),
+                    format!("{var_name} (AssistantAgent)"),
+                    StepType::Agent,
+                )
+                .with_source(SourceLocation::new(&path_str, line))
+                .with_snippet(format!("{var_name} = AssistantAgent(...)")),
             );
         }
     }
@@ -47,9 +54,13 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
             let line = line_at(content, mat.start());
 
             workflow.steps.push(
-                Step::new(format!("ag_proxy_{step_counter}"), format!("{var_name} (UserProxyAgent)"), StepType::Agent)
-                    .with_source(SourceLocation::new(&path_str, line))
-                    .with_snippet(format!("{var_name} = UserProxyAgent(...)")),
+                Step::new(
+                    format!("ag_proxy_{step_counter}"),
+                    format!("{var_name} (UserProxyAgent)"),
+                    StepType::Agent,
+                )
+                .with_source(SourceLocation::new(&path_str, line))
+                .with_snippet(format!("{var_name} = UserProxyAgent(...)")),
             );
         }
     }
@@ -63,14 +74,26 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
             let line = line_at(content, mat.start());
 
             workflow.steps.push(
-                Step::new(format!("ag_gc_{step_counter}"), format!("{var_name} (GroupChat)"), StepType::Chain)
-                    .with_source(SourceLocation::new(&path_str, line))
-                    .with_snippet(format!("{var_name} = GroupChat(...)"))
-                    .with_children(
-                        agent_names.iter().enumerate().map(|(i, name)| {
-                            Step::new(format!("ag_gc_{step_counter}_member_{i}"), name.clone(), StepType::Agent)
-                        }).collect(),
-                    ),
+                Step::new(
+                    format!("ag_gc_{step_counter}"),
+                    format!("{var_name} (GroupChat)"),
+                    StepType::Chain,
+                )
+                .with_source(SourceLocation::new(&path_str, line))
+                .with_snippet(format!("{var_name} = GroupChat(...)"))
+                .with_children(
+                    agent_names
+                        .iter()
+                        .enumerate()
+                        .map(|(i, name)| {
+                            Step::new(
+                                format!("ag_gc_{step_counter}_member_{i}"),
+                                name.clone(),
+                                StepType::Agent,
+                            )
+                        })
+                        .collect(),
+                ),
             );
         }
     }
@@ -82,9 +105,13 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
             step_counter += 1;
             let line = line_at(content, mat.start());
             workflow.steps.push(
-                Step::new(format!("ag_cond_{step_counter}"), "Conditional branch".to_string(), StepType::Conditional)
-                    .with_source(SourceLocation::new(&path_str, line))
-                    .with_snippet(mat.as_str().trim().to_string()),
+                Step::new(
+                    format!("ag_cond_{step_counter}"),
+                    "Conditional branch".to_string(),
+                    StepType::Conditional,
+                )
+                .with_source(SourceLocation::new(&path_str, line))
+                .with_snippet(mat.as_str().trim().to_string()),
             );
         }
     }
@@ -96,9 +123,13 @@ pub fn parse(content: &str, path: &Path, _config: &ParserConfig) -> Result<Workf
             step_counter += 1;
             let line = line_at(content, mat.start());
             workflow.steps.push(
-                Step::new(format!("ag_loop_{step_counter}"), "Loop".to_string(), StepType::Loop)
-                    .with_source(SourceLocation::new(&path_str, line))
-                    .with_snippet(mat.as_str().trim().to_string()),
+                Step::new(
+                    format!("ag_loop_{step_counter}"),
+                    "Loop".to_string(),
+                    StepType::Loop,
+                )
+                .with_source(SourceLocation::new(&path_str, line))
+                .with_snippet(mat.as_str().trim().to_string()),
             );
         }
     }
@@ -136,6 +167,9 @@ mod tests {
         let content = "if x > 0:\n    agent = AssistantAgent(\"a\", llm_config={})\n";
         let path = std::path::Path::new("test.py");
         let w = parse(content, path, &ParserConfig::default()).unwrap();
-        assert!(w.steps.iter().any(|s| matches!(s.step_type, StepType::Conditional)));
+        assert!(w
+            .steps
+            .iter()
+            .any(|s| matches!(s.step_type, StepType::Conditional)));
     }
 }

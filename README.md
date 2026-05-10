@@ -50,6 +50,9 @@ workflow-map ./workflow.yaml --no-cache
 # Remote URL
 workflow-map https://raw.githubusercontent.com/org/repo/main/workflow.yaml
 
+# Timing + resources
+workflow-map ./my_workflow.yaml --timing-file timing.csv
+
 # Watch mode
 workflow-map ./my_workflow.yaml --watch
 ```

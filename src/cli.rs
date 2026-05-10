@@ -73,4 +73,8 @@ pub struct Cli {
     /// Refresh remote cache.
     #[arg(long)]
     pub refresh: bool,
+
+    /// Load timing/resource data from CSV.
+    #[arg(long)]
+    pub timing_file: Option<String>,
 }

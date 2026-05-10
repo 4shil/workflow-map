@@ -8,6 +8,7 @@ use workflow_map::export::Exporter;
 use workflow_map::parsers::{detect_framework, parse_workflow};
 use workflow_map::remote::{fetch_to_cache, is_remote_path};
 use workflow_map::renderer::TuiApp;
+use workflow_map::timing::{apply_timing, load_timing};
 use workflow_map::validate;
 
 fn main() -> Result<()> {
@@ -41,6 +42,13 @@ fn main() -> Result<()> {
 
     let mut workflow = parse_workflow(framework, &parser_config, &path)
         .with_context(|| format!("Failed to parse workflow from: {}", path.display()))?;
+
+    if let Some(timing_path) = cli.timing_file.as_deref() {
+        let timing_path = PathBuf::from(timing_path);
+        if let Some(records) = load_timing(&timing_path) {
+            apply_timing(&mut workflow.steps, &records);
+        }
+    }
 
     validate::validate(&mut workflow);
 

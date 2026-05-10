@@ -1,191 +1,121 @@
 # Testing Guide
 
-This document describes the testing strategy for workflow-map, including how to
-run tests, how tests are organized, and how to add new ones.
+## Running Tests
 
-## How to Run Tests
+```bash
+# Run all tests
+cargo test
 
-### All Tests
+# Run with output visible
+cargo test -- --nocapture
 
-    cargo test
+# Run specific test
+cargo test test_parse_crewai
 
-### Sequential Execution
+# Run tests matching a pattern
+cargo test langchain
 
-Some tests (particularly snapshot tests) may interfere with each other when run
-in parallel. Use a single thread:
+# Run integration tests only
+cargo test --test integration
 
-    cargo test -- --test-threads=1
-
-### Filtered Tests
-
-Run tests matching a pattern:
-
-    cargo test langchain       # All langchain tests
-    cargo test parser          # All parser tests
-    cargo test detector        # Framework detection tests
-
-### Verbose Output
-
-Show `println!` and `eprintln!` output from passing tests:
-
-    cargo test -- --nocapture
-
-### Specific Test Binary
-
-Run only integration tests:
-
-    cargo test --test integration
+# Run sequentially (useful for TUI tests)
+cargo test -- --test-threads=1
+```
 
 ## Test Organization
 
-Tests are organized into three layers:
+### Unit Tests
+Each source module contains inline unit tests:
 
-### 1. Unit Tests (per module)
+```
+src/parsers/langchain.rs    -> 4 unit tests (pipe, agent, empty, classify)
+src/parsers/crewai.rs       -> 3 unit tests (config, malformed, empty)
+src/parsers/dspy.rs         -> 2 unit tests (module, predict)
+src/parsers/autogen.rs      -> 1 unit test (agents)
+src/parsers/hermes.rs       -> 3 unit tests (skill, no frontmatter, empty)
+src/parsers/generic.rs      -> 4 unit tests (yaml, json, edges, empty)
+src/parsers/detector.rs     -> 6 unit tests (all framework detections)
+```
 
-Each source module contains inline unit tests in a `#[cfg(test)] mod tests`
-block. These test individual functions and internal logic in isolation.
+### Integration Tests
+`tests/integration.rs` tests end-to-end parsing and export:
 
-    src/
-    |-- model.rs         -- Step, Workflow, FlatStep construction and queries
-    |-- export.rs        -- Text, JSON, Markdown export correctness
-    |-- parsers/
-    |   |-- langchain.rs -- LangChain regex matching and step extraction
-    |   |-- crewai.rs    -- YAML key mapping and task ordering
-    |   |-- autogen.py   -- Agent extraction patterns
-    |   |-- dspy.rs      -- Predict/Retrieve module detection
-    |   |-- hermes.rs    -- SKILL.md frontmatter parsing
-    |   |-- detector.rs  -- Framework auto-detection heuristics
-    |-- config.rs        -- TOML config file loading and defaults
+- **Parser integration** -- Parse each framework's fixture files, verify step counts
+- **Export integration** -- Export to text/JSON/Markdown, verify structure
+- **Error handling** -- Malformed files, empty files, missing files
 
-Run all unit tests:
+### Test Fixtures
+`tests/fixtures/` contains sample configs for each framework:
 
-    cargo test --lib
+```
+tests/fixtures/
+├── langchain/     # 5 files: simple_chain, agent_executor, runnable_parallel, empty, malformed
+├── crewai/        # 3 files: data_pipeline, empty, malformed
+├── dspy/          # 3 files: rag_program, simple_predict, empty
+├── autogen/       # 2 files: two_agents, empty
+├── hermes/        # 2 files: test_skill, empty_skill
+├── generic/       # 4 files: simple_workflow, parallel_workflow, workflow.json, empty
+└── mixed/         # 3 files: pipeline.yaml, langchain_script.py, SKILL.md
+```
 
-### 2. Integration Tests (`tests/` directory)
+## Adding New Tests
 
-Integration tests exercise the full pipeline: file input -> detection -> parsing
--> model -> export. Fixture files under `tests/fixtures/` serve as test inputs.
+### For a new parser:
+1. Add unit tests in the parser module (`#[cfg(test)] mod tests`)
+2. Add fixture files in `tests/fixtures/<framework>/`
+3. Add integration tests in `tests/integration.rs`
 
-Currently, integration tests are embedded as unit tests in each parser module
-that read from the `tests/fixtures/` directory at test time. Each parser module
-includes tests that:
+### Test fixture naming:
+- `<descriptive_name>.<ext>` -- Valid config files
+- `empty.<ext>` -- File with no workflow patterns
+- `malformed.<ext>` -- File with syntax errors
 
-1. Read each fixture file.
-2. Parse it into a `Workflow` model.
-3. Assert structural properties (step count, edge count, step names, etc.).
-
-Fixture directory layout:
-
-    tests/fixtures/
-    |-- langchain/
-    |   |-- simple_chain.py        # Minimal valid LangChain script
-    |   |-- agent_executor.py      # Agent + tool composition
-    |   |-- runnable_parallel.py   # Parallel chain syntax
-    |   |-- empty.py               # Empty file edge case
-    |   |-- malformed.py           # Invalid Python syntax
-    |-- crewai/
-    |   |-- data_pipeline.yaml     # Valid CrewAI workflow
-    |   |-- empty.yaml             # Empty YAML
-    |   |-- malformed.yaml         # Invalid YAML structure
-    |-- dspy/
-    |   |-- simple_predict.py      # Basic DSPy Predict module
-    |   |-- rag_program.py         # Multi-step RAG pipeline
-    |   |-- empty.py               # Empty file
-    |-- autogen/
-    |   |-- two_agents.py          # Two-agent AutoGen setup
-    |   |-- empty.py               # Empty file
-    |-- hermes/
-    |   |-- test_skill.md          # Valid SKILL.md
-    |   |-- empty_skill.md         # Empty skill file
-    |-- generic/
-    |   |-- simple_workflow.yaml   # Generic YAML workflow
-    |   |-- parallel_workflow.yaml # Parallel step definitions
-    |   |-- workflow.json          # JSON format workflow
-    |   |-- empty.yaml             # Empty file
-    |-- mixed/
-    |   |-- pipeline.yaml          # CrewAI YAML
-    |   |-- langchain_script.py    # LangChain Python
-    |   |-- SKILL.md               # Hermes skill
-
-### 3. Snapshot Tests
-
-Snapshot tests capture the full text/JSON/Markdown output of the tool and
-compare it against stored expected outputs. These prevent regressions in
-rendering and export.
-
-Snapshots are stored as strings inline in test functions (or in dedicated
-snapshot files under `tests/snapshots/` in future iterations).
-
-To update snapshots after an intentional change:
-
-    cargo test -- --nocapture    # Inspect new output
-    # Then update the expected strings in the test files
-
-## How to Add New Test Fixtures
-
-### For Existing Frameworks
-
-1. Add the fixture file under `tests/fixtures/<framework>/`.
-2. Add a test case in the corresponding parser's `#[cfg(test)]` module that:
-   - Reads the fixture with `std::fs::read_to_string`.
-   - Parses it with the parser's `parse()` function.
-   - Asserts expected properties.
-
-Example:
-
-    #[test]
-    fn test_simple_chain() {
-        let path = PathBuf::from("tests/fixtures/langchain/simple_chain.py");
-        let content = fs::read_to_string(&path).unwrap();
-        let config = ParserConfig::default();
-        let workflow = langchain::parse(&content, &path, &config).unwrap();
-        assert_eq!(workflow.step_count(), 3);
-        assert_eq!(workflow.steps[0].name, "prompt_template");
-    }
-
-### For New Frameworks
-
-1. Create a new fixture directory: `tests/fixtures/<new_framework>/`.
-2. Add at least three fixtures: valid, empty, malformed.
-3. Create test functions in the new parser module.
-4. Add integration-level tests that verify the full pipeline.
+### Example unit test:
+```rust
+#[test]
+fn test_parse_my_framework() {
+    let content = include_str!("../../tests/fixtures/myframework/sample.yaml");
+    let path = std::path::Path::new("sample.yaml");
+    let workflow = my_framework::parse(content, path).unwrap();
+    assert!(!workflow.steps.is_empty());
+    assert_eq!(workflow.framework, Framework::MyFramework);
+}
+```
 
 ## CI Pipeline
 
-Tests run automatically on every push and pull request via GitHub Actions.
+Every push and PR triggers the CI pipeline:
 
-### CI Steps
+1. Checkout code
+2. Install Rust stable
+3. Cache cargo dependencies
+4. `cargo fmt --check` -- Verify formatting
+5. `cargo clippy -- -D warnings` -- Lint
+6. `cargo build --release` -- Build release binary
+7. `cargo test` -- Run all tests
 
-1. **Checkout** -- Clone the repository.
-2. **Install Rust** -- Use `dtolnay/rust-toolchain@stable`.
-3. **Cache** -- Cache `target/` and `~/.cargo/` for faster builds.
-4. **Format check** -- `cargo fmt --check`.
-5. **Lint** -- `cargo clippy -- -D warnings`.
-6. **Build** -- `cargo build --release`.
-7. **Test** -- `cargo test -- --test-threads=1`.
-8. **Coverage** (optional) -- `cargo tarpaulin` or `cargo llvm-cov`.
-
-### CI Configuration
-
-The workflow is defined in `.github/workflows/ci.yml` and runs on:
-
-- `push` to `main`
-- `pull_request` targeting `main`
+All steps must pass before merging.
 
 ## Coverage Goals
 
-| Area                  | Target | Notes                                |
-|-----------------------|--------|--------------------------------------|
-| Parser modules        | 80%+   | All branches: valid, empty, malformed|
-| Model (Workflow/Step) | 90%+   | Core data structures                 |
-| Export (text/JSON/MD) | 85%+   | All output formats                   |
-| Detector              | 75%+   | All framework heuristics             |
-| Config                | 70%+   | Default values, file loading         |
-| Renderer (TUI)        | 50%+   | Interactive; hard to unit test       |
-| Overall               | 75%+   |                                      |
+| Area | Target |
+|------|--------|
+| Parser detection | 90% |
+| Parser logic | 80% |
+| Export engine | 85% |
+| Error handling | 75% |
+| Overall | 75% |
 
-To generate a local coverage report:
+## Snapshot Testing
 
-    cargo install cargo-tarpaulin
-    cargo tarpaulin --out Html
-    open tarpaulin-report.html
+For complex output verification, use snapshot tests:
+
+```rust
+#[test]
+fn test_text_output_snapshot() {
+    let workflow = parse_fixture("crewai/data_pipeline.yaml");
+    let exporter = Exporter::new(workflow);
+    let text = exporter.to_text();
+    insta::assert_snapshot!("crewai_data_pipeline", text);
+}
+```

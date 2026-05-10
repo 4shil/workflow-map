@@ -56,6 +56,40 @@ pub struct TuiApp {
     toast: Option<String>,
     /// Countdown for toast display frames.
     toast_ticks: u8,
+    /// Current view mode (list, tree, split).
+    view_mode: ViewMode,
+    /// Active panel in split view (0 = tree, 1 = list).
+    active_panel: u8,
+    /// Tree panel cursor.
+    tree_cursor: usize,
+}
+
+/// View mode for the TUI.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ViewMode {
+    List,
+    Tree,
+    Split,
+}
+
+impl ViewMode {
+    /// Cycle to the next view mode.
+    pub fn cycle(self) -> Self {
+        match self {
+            ViewMode::List => ViewMode::Tree,
+            ViewMode::Tree => ViewMode::Split,
+            ViewMode::Split => ViewMode::List,
+        }
+    }
+
+    /// Short label for the status bar.
+    pub fn label(self) -> &'static str {
+        match self {
+            ViewMode::List => "list",
+            ViewMode::Tree => "tree",
+            ViewMode::Split => "split",
+        }
+    }
 }
 
 impl TuiApp {
@@ -78,6 +112,9 @@ impl TuiApp {
             reload_requested: false,
             toast: None,
             toast_ticks: 0,
+            view_mode: ViewMode::List,
+            active_panel: 0,
+            tree_cursor: 0,
         }
     }
 
@@ -381,6 +418,14 @@ impl TuiApp {
                 self.show_help = !self.show_help;
             }
 
+            // Cycle view mode
+            KeyCode::Char('v') | KeyCode::Char('V') => {
+                self.view_mode = self.view_mode.cycle();
+                self.cursor = 0;
+                self.tree_cursor = 0;
+                self.scroll_offset = 0;
+            }
+
             // Yank (copy) step name
             KeyCode::Char('y') | KeyCode::Char('Y') => {
                 let filtered = self.filtered_steps();
@@ -568,13 +613,14 @@ impl TuiApp {
         };
 
         let title_text = format!(
-            " {} ({}) | {}{}{} | Filter: {}",
+            " {} ({}) | {}{}{} | Filter: {} | View: {}",
             self.workflow.name,
             self.workflow.framework,
             step_pos,
             reload_info,
             search_label,
-            filter_label
+            filter_label,
+            self.view_mode.label()
         );
 
         let title = Paragraph::new(title_text).style(
@@ -584,19 +630,54 @@ impl TuiApp {
         );
         frame.render_widget(title, title_area);
 
-        // Content area
-        if let Some(selected) = self.selected_step {
-            if selected < filtered.len() {
-                let chunks = Layout::default()
+        // Content area — layout depends on view mode
+        match self.view_mode {
+            ViewMode::Split => {
+                // Split: tree (left) + list (right) + detail (bottom-right)
+                let split_chunks = Layout::default()
                     .direction(Direction::Horizontal)
-                    .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+                    .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
                     .split(content_area);
 
-                self.draw_steps_list(frame, chunks[0], &filtered, viewport_height);
-                self.draw_detail_panel(frame, chunks[1], &filtered[selected]);
+                let right_chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
+                    .split(split_chunks[1]);
+
+                self.draw_tree_panel(frame, split_chunks[0]);
+                self.draw_steps_list(frame, right_chunks[0], &filtered, viewport_height);
+                if let Some(selected) = self.selected_step {
+                    if selected < filtered.len() {
+                        self.draw_detail_panel(frame, right_chunks[1], &filtered[selected]);
+                    } else {
+                        self.draw_minimap(frame, right_chunks[1], &filtered);
+                    }
+                } else {
+                    self.draw_minimap(frame, right_chunks[1], &filtered);
+                }
             }
-        } else {
-            self.draw_steps_list(frame, content_area, &filtered, viewport_height);
+            ViewMode::Tree => {
+                // Tree-only view
+                self.draw_tree_panel(frame, content_area);
+            }
+            ViewMode::List => {
+                // List view (original behavior)
+                if let Some(selected) = self.selected_step {
+                    if selected < filtered.len() {
+                        let chunks = Layout::default()
+                            .direction(Direction::Horizontal)
+                            .constraints([Constraint::Percentage(60), Constraint::Percentage(40)])
+                            .split(content_area);
+
+                        self.draw_steps_list(frame, chunks[0], &filtered, viewport_height);
+                        self.draw_detail_panel(frame, chunks[1], &filtered[selected]);
+                    } else {
+                        self.draw_steps_list(frame, content_area, &filtered, viewport_height);
+                    }
+                } else {
+                    self.draw_steps_list(frame, content_area, &filtered, viewport_height);
+                }
+            }
         }
 
         // Status bar
@@ -919,5 +1000,82 @@ impl TuiApp {
 
         frame.render_widget(Clear, prompt_area);
         frame.render_widget(prompt, prompt_area);
+    }
+
+    /// Draw the tree panel (left side of split view).
+    fn draw_tree_panel(&self, frame: &mut Frame<'_>, area: Rect) {
+        let mut lines: Vec<Line> = Vec::new();
+        let steps = self.filtered_steps();
+
+        for (i, step) in steps.iter().enumerate() {
+            let is_cursor = i == self.cursor;
+            let indent = "  ".repeat(step.depth);
+            let icon = if step.has_children {
+                if step.collapsed {
+                    "[+]"
+                } else {
+                    "[-]"
+                }
+            } else {
+                " - "
+            };
+            let name = if step.name.len() > 40 {
+                format!("{}…", &step.name[..39])
+            } else {
+                step.name.clone()
+            };
+            let line_text = format!("{}{} {}", indent, icon, name);
+            let style = if is_cursor {
+                Style::default()
+                    .bg(Color::Gray)
+                    .fg(Color::Black)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(Color::White)
+            };
+            lines.push(Line::from(Span::styled(line_text, style)));
+        }
+
+        let paragraph = Paragraph::new(Text::from(lines))
+            .block(Block::default().borders(Borders::ALL).title(" Tree "));
+        frame.render_widget(paragraph, area);
+    }
+
+    /// Draw the minimap (bottom-right of split view).
+    fn draw_minimap(&self, frame: &mut Frame<'_>, area: Rect, steps: &[FlatStep]) {
+        let mut lines: Vec<Line> = Vec::new();
+        let total = steps.len();
+        if total == 0 {
+            lines.push(Line::from(" (empty)"));
+        } else {
+            let bar_width = area.width.saturating_sub(2).max(1) as usize;
+            let cursor_frac = if total > 1 {
+                self.cursor as f64 / (total - 1) as f64
+            } else {
+                0.0
+            };
+            let cursor_pos = (cursor_frac * bar_width as f64) as usize;
+
+            let mut bar = String::with_capacity(bar_width);
+            for i in 0..bar_width {
+                if i == cursor_pos {
+                    bar.push('|');
+                } else {
+                    bar.push('=');
+                }
+            }
+            lines.push(Line::from(Span::styled(
+                bar,
+                Style::default().fg(Color::DarkGray),
+            )));
+            lines.push(Line::from(Span::styled(
+                format!(" {}/{}", self.cursor + 1, total),
+                Style::default().fg(Color::Gray),
+            )));
+        }
+
+        let paragraph = Paragraph::new(Text::from(lines))
+            .block(Block::default().borders(Borders::ALL).title(" Minimap "));
+        frame.render_widget(paragraph, area);
     }
 }

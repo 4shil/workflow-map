@@ -8,6 +8,7 @@ use workflow_map::export::Exporter;
 use workflow_map::parsers::{detect_framework, parse_workflow};
 use workflow_map::remote::{fetch_to_cache, is_remote_path};
 use workflow_map::renderer::TuiApp;
+use workflow_map::validate;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
@@ -38,8 +39,10 @@ fn main() -> Result<()> {
             .with_context(|| format!("Cannot detect framework for: {}", path.display()))?
     };
 
-    let workflow = parse_workflow(framework, &parser_config, &path)
+    let mut workflow = parse_workflow(framework, &parser_config, &path)
         .with_context(|| format!("Failed to parse workflow from: {}", path.display()))?;
+
+    validate::validate(&mut workflow);
 
     if workflow.has_parse_errors() {
         for err in workflow.parse_errors() {

@@ -55,3 +55,4 @@
 - [ ] LLM-powered workflow analysis and suggestions
 - [ ] Integration with CI/CD pipelines
 - [ ] WebAssembly build for browser-based TUI
+- [ ] Validation rules per framework (see docs/VALIDATION.md)

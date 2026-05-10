@@ -94,6 +94,8 @@ Indentation: 2 spaces per nesting depth.
 | `?` / `h` | Toggle help |
 | `PageUp` / `PageDown` | Scroll by 10 |
 | `Home` / `End` | Jump to first / last |
+| Mouse click | Select step |
+| Mouse wheel | Move cursor |
 
 ### Search Mode
 | Key | Action |

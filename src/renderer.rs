@@ -6,7 +6,7 @@
 use crate::config::AppConfig;
 use crate::model::{FilterMode, FlatStep, SearchFilter, Status, Workflow};
 use anyhow::Result;
-use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyModifiers, MouseEvent};
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -120,9 +120,11 @@ impl TuiApp {
     /// Run the interactive TUI event loop.
     pub fn run(&mut self) -> Result<()> {
         let mut terminal = ratatui::init();
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture);
 
         let result = self.event_loop(&mut terminal);
 
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture);
         ratatui::restore();
         result
     }
@@ -153,12 +155,20 @@ impl TuiApp {
 
             // Poll for key events with a short timeout so we can update the display
             if event::poll(Duration::from_millis(200))? {
-                if let Event::Key(key) = event::read()? {
-                    if self.search_mode {
-                        self.handle_search_input(key);
-                    } else {
-                        self.handle_input(key);
+                match event::read()? {
+                    Event::Key(key) => {
+                        if self.search_mode {
+                            self.handle_search_input(key);
+                        } else {
+                            self.handle_input(key);
+                        }
                     }
+                    Event::Mouse(mouse) => {
+                        if !self.search_mode {
+                            self.handle_mouse(mouse);
+                        }
+                    }
+                    _ => {}
                 }
             }
         }
@@ -282,7 +292,7 @@ impl TuiApp {
     }
 
     /// Handle key input while in normal mode.
-    fn handle_input(&mut self, key: event::KeyEvent) {
+    fn handle_input(&mut self, key: KeyEvent) {
         match key.code {
             // Quit
             KeyCode::Char('q') | KeyCode::Char('Q') => {
@@ -393,6 +403,60 @@ impl TuiApp {
         }
         let target_id = &filtered[self.cursor].id;
         Self::set_collapse_recursive(&mut self.workflow.steps, target_id, false);
+    }
+
+    fn handle_mouse(&mut self, mouse: MouseEvent) {
+        match mouse.kind {
+            event::MouseEventKind::Down(_) => {
+                if let Some(clicked) = self.cursor_from_mouse(mouse.row) {
+                    self.cursor = clicked;
+                    self.selected_step = Some(clicked);
+                }
+            }
+            event::MouseEventKind::ScrollUp => {
+                if self.cursor > 0 {
+                    self.cursor -= 1;
+                }
+            }
+            event::MouseEventKind::ScrollDown => {
+                let filtered = self.filtered_steps();
+                if self.cursor + 1 < filtered.len() {
+                    self.cursor += 1;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn cursor_from_mouse(&self, row: u16) -> Option<usize> {
+        let start_row = 1;
+        let viewport_height = self.viewport_height();
+        if row < start_row || row >= start_row + viewport_height as u16 {
+            return None;
+        }
+        let local_index = row.saturating_sub(start_row) as usize;
+        let index = self.scroll_offset + local_index;
+        let filtered = self.filtered_steps();
+        if index < filtered.len() {
+            Some(index)
+        } else {
+            None
+        }
+    }
+
+    fn viewport_height(&self) -> usize {
+        let height = self
+            .workflow_height()
+            .saturating_sub(RESERVED_ROWS as usize);
+        height.max(1)
+    }
+
+    fn workflow_height(&self) -> usize {
+        if let Some(size) = self.config.render_terminal_size() {
+            size.1 as usize
+        } else {
+            24
+        }
     }
 
     /// Recursively find a step by id and set its collapsed state.

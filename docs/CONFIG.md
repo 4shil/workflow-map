@@ -88,7 +88,13 @@ All config file values can be overridden by CLI flags:
 | N/A | `--config <path>` for custom config path |
 | N/A | `--refresh` to re-download remote URLs |
 | N/A | `--timing-file <path>` to load duration/resource data |
+| N/A | `--status-file <path>` to load status/resource overrides |
+| N/A | `--strict` to fail on validation warnings |
 | `parsers.disable_cache` | `--no-cache` |
 | `render.respect_no_color` | `--no-color` |
 | `default_export_format` | `--format <format>` |
 | `watch.debounce_ms` | N/A (config only) |
+
+CLI flags take precedence over file values. For example, `--no-color` wins over
+the configured color scheme, and `--no-config` ignores both the default config
+location and any custom path.

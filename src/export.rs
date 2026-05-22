@@ -22,6 +22,9 @@ impl Exporter {
         let mut ok_count: usize = 0;
         let mut err_count: usize = 0;
         let mut waiting_count: usize = 0;
+        let mut tokens: u64 = 0;
+        let mut api_calls: u32 = 0;
+        let mut cost: f64 = 0.0;
         for step in &flat {
             total += 1;
             match step.status {
@@ -30,6 +33,25 @@ impl Exporter {
                 crate::model::Status::Waiting => waiting_count += 1,
                 _ => {}
             }
+            tokens += step.resources.total_tokens();
+            api_calls += step.resources.api_calls.unwrap_or(0);
+            cost += step.resources.cost_usd.unwrap_or(0.0);
+        }
+
+        lines.push(format!("Pattern: {}", self.workflow.graph_pattern));
+        if !self.workflow.validation_warnings.is_empty() {
+            lines.push("Validation warnings:".to_string());
+            for warning in &self.workflow.validation_warnings {
+                lines.push(format!("  - {warning}"));
+            }
+            lines.push(String::new());
+        }
+        if self.workflow.has_parse_errors() {
+            lines.push("Parse warnings:".to_string());
+            for warning in self.workflow.parse_errors() {
+                lines.push(format!("  - {warning}"));
+            }
+            lines.push(String::new());
         }
 
         for (idx, step) in flat.iter().enumerate() {
@@ -55,6 +77,11 @@ impl Exporter {
         lines.push(format!(
             "{total} steps, {ok_count} ok, {err_count} errors, {waiting_count} waiting"
         ));
+        if tokens > 0 || api_calls > 0 || cost > 0.0 {
+            lines.push(format!(
+                "Resources: {tokens} tokens, {api_calls} api calls, ${cost:.4}"
+            ));
+        }
         lines.join("\n")
     }
 
@@ -142,7 +169,11 @@ impl Exporter {
             keys.sort();
             for key in keys {
                 let value = &self.workflow.metadata[key];
-                lines.push(format!("| {key} | {value} |"));
+                lines.push(format!(
+                    "| {} | {} |",
+                    escape_markdown_table_cell(key),
+                    escape_markdown_table_cell(value)
+                ));
             }
             lines.push(String::new());
         }
@@ -167,7 +198,9 @@ impl Exporter {
             };
             lines.push(format!(
                 "  \"{}\" [label=\"{}\", color=\"{}\"];",
-                step.id, label, color
+                escape_dot(&step.id),
+                escape_dot(&label),
+                color
             ));
         }
 
@@ -179,7 +212,9 @@ impl Exporter {
             };
             lines.push(format!(
                 "  \"{}\" -> \"{}\" [label=\"{}\"];",
-                edge.from, edge.to, label
+                escape_dot(&edge.from),
+                escape_dot(&edge.to),
+                label
             ));
         }
 
@@ -191,17 +226,105 @@ impl Exporter {
         let mut lines: Vec<String> = Vec::new();
         lines.push("flowchart LR".to_string());
         for step in self.workflow.flatten_steps() {
-            let node = format!("{}[\"{}\"]", step.id, step.name);
+            let node = format!(
+                "{}[\"{}\"]",
+                mermaid_id(&step.id),
+                escape_mermaid_label(&step.name)
+            );
             lines.push(format!("  {node}"));
         }
         for edge in &self.workflow.edges {
             let label = match edge.edge_type {
-                EdgeType::Sequential => "",
-                EdgeType::Conditional => "|cond|",
-                EdgeType::Parallel => "|par|",
+                EdgeType::Sequential => "-->",
+                EdgeType::Conditional => "-->|cond|",
+                EdgeType::Parallel => "-->|par|",
             };
-            lines.push(format!("  {} {} {}", edge.from, label, edge.to));
+            lines.push(format!(
+                "  {} {} {}",
+                mermaid_id(&edge.from),
+                label,
+                mermaid_id(&edge.to)
+            ));
         }
         lines.join("\n")
+    }
+}
+
+fn escape_dot(input: &str) -> String {
+    input.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+fn escape_mermaid_label(input: &str) -> String {
+    input.replace('"', "&quot;")
+}
+
+fn escape_markdown_table_cell(input: &str) -> String {
+    input.replace('\\', "\\\\").replace('|', "\\|")
+}
+
+fn mermaid_id(input: &str) -> String {
+    let mut output = String::from("n_");
+    for ch in input.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            output.push(ch);
+        } else {
+            output.push('_');
+        }
+    }
+    output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Edge, Framework, Step, StepType, Workflow};
+
+    fn workflow_with_unsafe_names() -> Workflow {
+        Workflow::new("unsafe", Framework::Generic)
+            .with_steps(vec![
+                Step::new("load:data", "Load \"data\"", StepType::Tool),
+                Step::new("clean-data", "Clean | normalize", StepType::Step),
+            ])
+            .with_edges(vec![Edge::new("load:data", "clean-data")])
+            .with_metadata("owner|team", "data|platform")
+    }
+
+    #[test]
+    fn dot_escapes_labels_and_ids() {
+        let dot = Exporter::new(workflow_with_unsafe_names()).to_dot();
+
+        assert!(dot.contains("\"load:data\""));
+        assert!(dot.contains("Load \\\"data\\\""));
+    }
+
+    #[test]
+    fn mermaid_sanitizes_ids_and_escapes_labels() {
+        let mermaid = Exporter::new(workflow_with_unsafe_names()).to_mermaid();
+
+        assert!(mermaid.contains("n_load_data[\"Load &quot;data&quot;\"]"));
+        assert!(mermaid.contains("n_load_data --> n_clean_data"));
+    }
+
+    #[test]
+    fn markdown_escapes_metadata_table_cells() {
+        let markdown = Exporter::new(workflow_with_unsafe_names()).to_markdown();
+
+        assert!(markdown.contains("| owner\\|team | data\\|platform |"));
+    }
+
+    #[test]
+    fn text_export_includes_validation_and_resource_summary() {
+        let mut workflow = workflow_with_unsafe_names();
+        workflow.add_validation_warning("Duplicate step id: load:data");
+        workflow.steps[0].resources = crate::model::ResourceUsage::new()
+            .with_tokens(10, 20)
+            .with_api_calls(2)
+            .with_cost(0.125);
+
+        let text = Exporter::new(workflow).to_text();
+
+        assert!(text.contains("Validation warnings:"));
+        assert!(text.contains("Duplicate step id: load:data"));
+        assert!(text.contains("Resources: 30 tokens, 2 api calls, $0.1250"));
     }
 }

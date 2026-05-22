@@ -8,17 +8,26 @@ use workflow_map::export::Exporter;
 use workflow_map::parsers::{detect_framework, parse_workflow};
 use workflow_map::remote::{fetch_to_cache, is_remote_path};
 use workflow_map::renderer::TuiApp;
+use workflow_map::status::apply_status_file;
 use workflow_map::timing::{apply_timing, load_timing};
 use workflow_map::validate;
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    let config = if cli.no_config {
+    let mut config = if cli.no_config {
         AppConfig::default()
+    } else if let Some(config_path) = cli.config.as_deref() {
+        AppConfig::load_from(&PathBuf::from(config_path))
+            .with_context(|| format!("Failed to load config from custom path: {config_path}"))?
     } else {
         AppConfig::load().unwrap_or_default()
     };
+
+    if cli.no_color {
+        config.render.respect_no_color = true;
+        config.render.color_scheme = "none".to_string();
+    }
 
     let mut path = PathBuf::from(&cli.path);
 
@@ -50,12 +59,44 @@ fn main() -> Result<()> {
         }
     }
 
+    if let Some(status_path) = cli.status_file.as_deref() {
+        apply_status_file(&mut workflow.steps, &PathBuf::from(status_path))?;
+    }
+
     validate::validate(&mut workflow);
+
+    if cli.strict && workflow.has_validation_warnings() {
+        anyhow::bail!(
+            "Workflow validation failed with {} warning(s): {}",
+            workflow.validation_warnings().len(),
+            workflow.validation_warnings().join("; ")
+        );
+    }
 
     if workflow.has_parse_errors() {
         for err in workflow.parse_errors() {
             eprintln!("[parse warning] {err}");
         }
+    }
+
+    let graph_format = match cli.format {
+        OutputFormat::Dot => Some("dot"),
+        OutputFormat::Mermaid => Some("mermaid"),
+        _ => cli.graph.as_deref(),
+    };
+
+    if let Some(graph) = graph_format {
+        let exporter = Exporter::new(workflow);
+        let output = match graph {
+            "dot" => exporter.to_dot(),
+            "mermaid" => exporter.to_mermaid(),
+            _ => unreachable!("graph format is validated by clap"),
+        };
+        match &cli.output {
+            Some(path) => std::fs::write(path, output)?,
+            None => print!("{output}"),
+        }
+        return Ok(());
     }
 
     match cli.format {
@@ -87,24 +128,7 @@ fn main() -> Result<()> {
                 None => print!("{output}"),
             }
         }
-    }
-
-    if let Some(graph) = cli.graph.as_deref() {
-        // Re-parse for graph export (or use cache)
-        let workflow = parse_workflow(framework, &parser_config, &path)
-            .with_context(|| format!("Failed to parse workflow from: {}", path.display()))?;
-        let exporter = Exporter::new(workflow);
-        let output = match graph {
-            "dot" => exporter.to_dot(),
-            "mermaid" => exporter.to_mermaid(),
-            _ => String::new(),
-        };
-        if !output.is_empty() {
-            match &cli.output {
-                Some(path) => std::fs::write(path, output)?,
-                None => print!("{output}"),
-            }
-        }
+        OutputFormat::Dot | OutputFormat::Mermaid => unreachable!("graph formats return earlier"),
     }
 
     Ok(())

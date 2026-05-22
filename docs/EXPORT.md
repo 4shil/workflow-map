@@ -100,8 +100,11 @@ Full workflow serialization. Pretty-printed with 2-space indent.
 DOT and Mermaid are supported via `--graph`:
 
 ```
-workflow-map ./workflow.yaml --format json --graph dot --output workflow.dot
-workflow-map ./workflow.yaml --format json --graph mermaid --output workflow.mmd
+workflow-map ./workflow.yaml --format dot --output workflow.dot
+workflow-map ./workflow.yaml --format mermaid --output workflow.mmd
+
+The legacy `--graph dot|mermaid` flag is still accepted for compatibility, but
+new scripts should prefer the explicit output formats.
 ```
 
 See `docs/EXPORT_DOT_MERMAID.md` for details.

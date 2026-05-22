@@ -11,6 +11,10 @@ pub enum OutputFormat {
     Json,
     /// Markdown document.
     Markdown,
+    /// Graphviz DOT graph.
+    Dot,
+    /// Mermaid flowchart.
+    Mermaid,
 }
 
 impl Default for OutputFormat {
@@ -38,7 +42,7 @@ pub struct Cli {
     #[arg(short, long, value_enum, default_value_t = OutputFormat::Interactive)]
     pub format: OutputFormat,
 
-    /// Graph export format (dot, mermaid) when applicable.
+    /// Graph export format (dot, mermaid). Prefer --format dot|mermaid for new scripts.
     #[arg(long, value_parser = ["dot", "mermaid"])]
     pub graph: Option<String>,
 
@@ -55,7 +59,7 @@ pub struct Cli {
     pub no_cache: bool,
 
     /// Force framework detection.
-    #[arg(short, long, value_parser = ["langchain", "crewai", "dspy", "autogen", "hermes", "openai", "llamaindex", "generic"])]
+    #[arg(short = 'F', long, value_parser = ["langchain", "crewai", "dspy", "autogen", "hermes", "openai", "llamaindex", "generic"])]
     pub framework: Option<String>,
 
     /// Disable colored output.
@@ -77,4 +81,38 @@ pub struct Cli {
     /// Load timing/resource data from CSV.
     #[arg(long)]
     pub timing_file: Option<String>,
+
+    /// Load step status/resource overrides from JSON or YAML.
+    #[arg(long)]
+    pub status_file: Option<String>,
+
+    /// Treat validation warnings as command failures.
+    #[arg(long)]
+    pub strict: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::CommandFactory;
+
+    #[test]
+    fn command_debug_asserts_pass() {
+        Cli::command().debug_assert();
+    }
+
+    #[test]
+    fn framework_uses_uppercase_short_flag() {
+        let cli = Cli::parse_from(["workflow-map", "workflow.yaml", "-F", "generic"]);
+        assert_eq!(cli.framework.as_deref(), Some("generic"));
+    }
+
+    #[test]
+    fn graph_formats_are_output_formats() {
+        let cli = Cli::parse_from(["workflow-map", "workflow.yaml", "--format", "dot"]);
+        assert_eq!(cli.format, OutputFormat::Dot);
+
+        let cli = Cli::parse_from(["workflow-map", "workflow.yaml", "--format", "mermaid"]);
+        assert_eq!(cli.format, OutputFormat::Mermaid);
+    }
 }

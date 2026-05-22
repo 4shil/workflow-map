@@ -22,6 +22,9 @@ impl Exporter {
         let mut ok_count: usize = 0;
         let mut err_count: usize = 0;
         let mut waiting_count: usize = 0;
+        let mut tokens: u64 = 0;
+        let mut api_calls: u32 = 0;
+        let mut cost: f64 = 0.0;
         for step in &flat {
             total += 1;
             match step.status {
@@ -30,6 +33,25 @@ impl Exporter {
                 crate::model::Status::Waiting => waiting_count += 1,
                 _ => {}
             }
+            tokens += step.resources.total_tokens();
+            api_calls += step.resources.api_calls.unwrap_or(0);
+            cost += step.resources.cost_usd.unwrap_or(0.0);
+        }
+
+        lines.push(format!("Pattern: {}", self.workflow.graph_pattern));
+        if !self.workflow.validation_warnings.is_empty() {
+            lines.push("Validation warnings:".to_string());
+            for warning in &self.workflow.validation_warnings {
+                lines.push(format!("  - {warning}"));
+            }
+            lines.push(String::new());
+        }
+        if self.workflow.has_parse_errors() {
+            lines.push("Parse warnings:".to_string());
+            for warning in self.workflow.parse_errors() {
+                lines.push(format!("  - {warning}"));
+            }
+            lines.push(String::new());
         }
 
         for (idx, step) in flat.iter().enumerate() {
@@ -55,6 +77,11 @@ impl Exporter {
         lines.push(format!(
             "{total} steps, {ok_count} ok, {err_count} errors, {waiting_count} waiting"
         ));
+        if tokens > 0 || api_calls > 0 || cost > 0.0 {
+            lines.push(format!(
+                "Resources: {tokens} tokens, {api_calls} api calls, ${cost:.4}"
+            ));
+        }
         lines.join("\n")
     }
 
@@ -283,5 +310,21 @@ mod tests {
         let markdown = Exporter::new(workflow_with_unsafe_names()).to_markdown();
 
         assert!(markdown.contains("| owner\\|team | data\\|platform |"));
+    }
+
+    #[test]
+    fn text_export_includes_validation_and_resource_summary() {
+        let mut workflow = workflow_with_unsafe_names();
+        workflow.add_validation_warning("Duplicate step id: load:data");
+        workflow.steps[0].resources = crate::model::ResourceUsage::new()
+            .with_tokens(10, 20)
+            .with_api_calls(2)
+            .with_cost(0.125);
+
+        let text = Exporter::new(workflow).to_text();
+
+        assert!(text.contains("Validation warnings:"));
+        assert!(text.contains("Duplicate step id: load:data"));
+        assert!(text.contains("Resources: 30 tokens, 2 api calls, $0.1250"));
     }
 }

@@ -82,6 +82,10 @@ pub struct Cli {
     #[arg(long)]
     pub timing_file: Option<String>,
 
+    /// Load step status/resource overrides from JSON or YAML.
+    #[arg(long)]
+    pub status_file: Option<String>,
+
     /// Treat validation warnings as command failures.
     #[arg(long)]
     pub strict: bool,

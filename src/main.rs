@@ -8,6 +8,7 @@ use workflow_map::export::Exporter;
 use workflow_map::parsers::{detect_framework, parse_workflow};
 use workflow_map::remote::{fetch_to_cache, is_remote_path};
 use workflow_map::renderer::TuiApp;
+use workflow_map::status::apply_status_file;
 use workflow_map::timing::{apply_timing, load_timing};
 use workflow_map::validate;
 
@@ -56,6 +57,10 @@ fn main() -> Result<()> {
         if let Some(records) = load_timing(&timing_path) {
             apply_timing(&mut workflow.steps, &records);
         }
+    }
+
+    if let Some(status_path) = cli.status_file.as_deref() {
+        apply_status_file(&mut workflow.steps, &PathBuf::from(status_path))?;
     }
 
     validate::validate(&mut workflow);

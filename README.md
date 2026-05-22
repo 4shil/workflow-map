@@ -39,10 +39,16 @@ workflow-map ./pipeline.py --format text
 workflow-map ./dspy_program.py --format json --output workflow.json
 
 # Graphviz DOT export
-workflow-map ./workflow.yaml --format json --graph dot --output workflow.dot
+workflow-map ./workflow.yaml --format dot --output workflow.dot
 
 # Mermaid export
-workflow-map ./workflow.yaml --format json --graph mermaid --output workflow.mmd
+workflow-map ./workflow.yaml --format mermaid --output workflow.mmd
+
+# Strict validation
+workflow-map ./workflow.yaml --format text --strict
+
+# Overlay runtime status/resources
+workflow-map ./workflow.yaml --format text --status-file status.yaml
 
 # Disable cache
 workflow-map ./workflow.yaml --no-cache
@@ -99,10 +105,12 @@ Arguments:
   <PATH>    File or directory to parse
 
 Options:
-  -f, --format <FORMAT>     Output format: interactive, text, json, md [default: interactive]
+  -f, --format <FORMAT>     Output format: interactive, text, json, markdown, dot, mermaid [default: interactive]
   -o, --output <PATH>       Output file path [default: stdout]
   -w, --watch               Watch mode: re-render on file changes
-  -F, --framework <NAME>    Force framework: langchain, crewai, dspy, autogen, hermes, generic
+  -F, --framework <NAME>    Force framework: langchain, crewai, dspy, autogen, hermes, openai, llamaindex, generic
+      --status-file <PATH>  Load step status/resource overrides from JSON or YAML
+      --strict              Treat validation warnings as command failures
       --no-color            Disable colored output
       --no-config           Ignore config file
       --config <PATH>       Custom config file path

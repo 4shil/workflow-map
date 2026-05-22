@@ -32,13 +32,13 @@ workflow-map https://raw.githubusercontent.com/user/repo/main/workflow.yaml
 
 ### Export to Graphviz DOT
 ```
-workflow-map ./workflow.yaml --format json --graph dot --output workflow.dot
+workflow-map ./workflow.yaml --format dot --output workflow.dot
 dot -Tpng workflow.dot -o workflow.png
 ```
 
 ### Export to Mermaid
 ```
-workflow-map ./workflow.yaml --format json --graph mermaid --output workflow.mmd
+workflow-map ./workflow.yaml --format mermaid --output workflow.mmd
 ```
 
 ### Load timing data
@@ -56,7 +56,8 @@ workflow-map ./workflow.yaml --format text  # warnings shown in output
 | Flag | Description |
 |------|-------------|
 | `--framework <name>` | Force framework (openai, llamaindex, etc.) |
-| `--graph <format>` | Graph export (dot, mermaid) |
+| `--format <format>` | Output format (interactive, text, json, markdown, dot, mermaid) |
+| `--graph <format>` | Legacy graph export compatibility flag (dot, mermaid) |
 | `--timing-file <path>` | Load timing data from CSV |
 | `--refresh` | Bypass remote cache |
 | `--no-cache` | Bypass parse cache |

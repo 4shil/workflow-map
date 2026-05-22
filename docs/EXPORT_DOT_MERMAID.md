@@ -4,7 +4,7 @@
 
 Command:
 ```
-workflow-map ./workflow.yaml --format json --graph dot --output workflow.dot
+workflow-map ./workflow.yaml --format dot --output workflow.dot
 ```
 
 Example output:
@@ -27,7 +27,7 @@ Notes:
 
 Command:
 ```
-workflow-map ./workflow.yaml --format json --graph mermaid --output workflow.mmd
+workflow-map ./workflow.yaml --format mermaid --output workflow.mmd
 ```
 
 Example output:

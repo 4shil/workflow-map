@@ -425,6 +425,14 @@ impl TuiApp {
                 self.tree_cursor = 0;
                 self.scroll_offset = 0;
             }
+            KeyCode::Tab if self.view_mode == ViewMode::Split => {
+                self.active_panel = (self.active_panel + 1) % 2;
+                self.toast = Some(match self.active_panel {
+                    0 => "Active panel: tree".to_string(),
+                    _ => "Active panel: list".to_string(),
+                });
+                self.toast_ticks = 6;
+            }
 
             // Yank (copy) step name
             KeyCode::Char('y') | KeyCode::Char('Y') => {
@@ -548,10 +556,6 @@ impl TuiApp {
         24usize.saturating_sub(RESERVED_ROWS as usize).max(1)
     }
 
-    fn workflow_height(&self) -> usize {
-        24usize
-    }
-
     /// Recursively find a step by id and set its collapsed state.
     fn set_collapse_recursive(steps: &mut [crate::model::Step], id: &str, collapsed: bool) -> bool {
         for step in steps.iter_mut() {
@@ -613,14 +617,15 @@ impl TuiApp {
         };
 
         let title_text = format!(
-            " {} ({}) | {}{}{} | Filter: {} | View: {}",
+            " {} ({}) | {}{}{} | Filter: {} | View: {}{}",
             self.workflow.name,
             self.workflow.framework,
             step_pos,
             reload_info,
             search_label,
             filter_label,
-            self.view_mode.label()
+            self.view_mode.label(),
+            self.active_panel_label()
         );
 
         let title = Paragraph::new(title_text).style(
@@ -767,6 +772,16 @@ impl TuiApp {
         );
 
         frame.render_widget(paragraph, area);
+    }
+
+    fn active_panel_label(&self) -> &'static str {
+        if self.view_mode != ViewMode::Split {
+            ""
+        } else if self.active_panel == 0 {
+            " | Panel: tree"
+        } else {
+            " | Panel: list"
+        }
     }
 
     /// Draw the detail panel for the selected step.

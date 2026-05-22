@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use std::fs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Download a remote file and cache it locally. Returns cached path.
 pub fn fetch_to_cache(url: &str, refresh: bool) -> Result<PathBuf> {

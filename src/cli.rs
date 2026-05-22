@@ -81,6 +81,10 @@ pub struct Cli {
     /// Load timing/resource data from CSV.
     #[arg(long)]
     pub timing_file: Option<String>,
+
+    /// Treat validation warnings as command failures.
+    #[arg(long)]
+    pub strict: bool,
 }
 
 #[cfg(test)]

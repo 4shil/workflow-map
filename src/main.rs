@@ -60,6 +60,14 @@ fn main() -> Result<()> {
 
     validate::validate(&mut workflow);
 
+    if cli.strict && workflow.has_validation_warnings() {
+        anyhow::bail!(
+            "Workflow validation failed with {} warning(s): {}",
+            workflow.validation_warnings().len(),
+            workflow.validation_warnings().join("; ")
+        );
+    }
+
     if workflow.has_parse_errors() {
         for err in workflow.parse_errors() {
             eprintln!("[parse warning] {err}");

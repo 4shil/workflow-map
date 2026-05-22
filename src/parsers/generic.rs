@@ -48,61 +48,14 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
             .insert("description".to_string(), desc.to_string());
     }
 
-    // Extract steps
     if let Some(steps) = value.get("steps").and_then(|v| v.as_sequence()) {
         for (i, step_val) in steps.iter().enumerate() {
-            let id = step_val
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&format!("step_{i}"))
-                .to_string();
-
-            let name = step_val
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or(&id)
-                .to_string();
-
-            let step_type = step_val
-                .get("type")
-                .and_then(|v| v.as_str())
-                .map(|t| match t.to_lowercase().as_str() {
-                    "agent" => StepType::Agent,
-                    "tool" => StepType::Tool,
-                    "chain" => StepType::Chain,
-                    "task" => StepType::Task,
-                    _ => StepType::Step,
-                })
-                .unwrap_or(StepType::Step);
-
-            let dependencies: Vec<String> = step_val
-                .get("depends_on")
-                .and_then(|v| v.as_sequence())
-                .map(|seq| {
-                    seq.iter()
-                        .filter_map(|v| v.as_str().map(String::from))
-                        .collect()
-                })
-                .unwrap_or_default();
-
-            let description = step_val
-                .get("description")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-
-            let step = Step::new(&id, &name, step_type)
-                .with_source(SourceLocation::new(
-                    path.to_string_lossy().to_string(),
-                    i + 1,
-                ))
-                .with_snippet(if description.is_empty() {
-                    format!("{id}: {name}")
-                } else {
-                    format!("{id}: {name} -- {description}")
-                })
-                .with_dependencies(dependencies);
-
-            workflow.steps.push(step);
+            workflow.steps.push(parse_step_value(
+                step_val,
+                path,
+                i + 1,
+                &format!("step_{i}"),
+            ));
         }
     }
 
@@ -138,6 +91,113 @@ pub fn parse(content: &str, path: &Path) -> Result<Workflow> {
     }
 
     Ok(workflow)
+}
+
+fn parse_step_value(
+    step_val: &serde_yaml::Value,
+    path: &Path,
+    line: usize,
+    fallback_id: &str,
+) -> Step {
+    let id = step_val
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or(fallback_id)
+        .to_string();
+
+    let name = step_val
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&id)
+        .to_string();
+
+    let step_type = step_val
+        .get("type")
+        .and_then(|v| v.as_str())
+        .map(parse_step_type)
+        .unwrap_or(StepType::Step);
+
+    let dependencies = parse_string_list(step_val.get("depends_on"));
+    let description = step_val
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let children = step_val
+        .get("children")
+        .and_then(|v| v.as_sequence())
+        .map(|children| {
+            children
+                .iter()
+                .enumerate()
+                .map(|(idx, child)| {
+                    parse_step_value(child, path, line + idx + 1, &format!("{id}_child_{idx}"))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    let mut step = Step::new(&id, &name, step_type)
+        .with_source(SourceLocation::new(
+            path.to_string_lossy().to_string(),
+            line,
+        ))
+        .with_snippet(if description.is_empty() {
+            format!("{id}: {name}")
+        } else {
+            format!("{id}: {name} -- {description}")
+        })
+        .with_dependencies(dependencies)
+        .with_children(children);
+
+    if let Some(status) = step_val
+        .get("status")
+        .and_then(|v| v.as_str())
+        .and_then(parse_status)
+    {
+        step.status = status;
+    }
+
+    step
+}
+
+fn parse_step_type(value: &str) -> StepType {
+    match value.to_lowercase().as_str() {
+        "agent" => StepType::Agent,
+        "tool" => StepType::Tool,
+        "chain" => StepType::Chain,
+        "task" => StepType::Task,
+        "predict" => StepType::Predict,
+        "retrieve" => StepType::Retrieve,
+        "lambda" => StepType::Lambda,
+        "module" => StepType::Module,
+        "conditional" => StepType::Conditional,
+        "loop" => StepType::Loop,
+        "error_handler" | "errorhandler" => StepType::ErrorHandler,
+        _ => StepType::Step,
+    }
+}
+
+fn parse_status(value: &str) -> Option<Status> {
+    match value.to_lowercase().as_str() {
+        "ok" | "success" => Some(Status::Ok),
+        "error" | "err" | "failed" => Some(Status::Error),
+        "running" | "run" => Some(Status::Running),
+        "waiting" | "pending" | "wait" => Some(Status::Waiting),
+        "skipped" | "skip" => Some(Status::Skipped),
+        _ => None,
+    }
+}
+
+fn parse_string_list(value: Option<&serde_yaml::Value>) -> Vec<String> {
+    value
+        .and_then(|v| v.as_sequence())
+        .map(|seq| {
+            seq.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -219,6 +279,31 @@ edges:
             .edges
             .iter()
             .all(|e| matches!(e.edge_type, EdgeType::Parallel)));
+    }
+
+    #[test]
+    fn test_parse_nested_status_steps() {
+        let content = r#"
+name: "Nested Workflow"
+steps:
+  - id: parent
+    name: "Parent"
+    type: loop
+    status: running
+    children:
+      - id: child
+        name: "Child"
+        type: retrieve
+        status: ok
+"#;
+        let path = std::path::Path::new("workflow.yaml");
+        let w = parse(content, path).unwrap();
+
+        assert_eq!(w.total_step_count(), 2);
+        assert_eq!(w.steps[0].step_type, StepType::Loop);
+        assert_eq!(w.steps[0].status, Status::Running);
+        assert_eq!(w.steps[0].children[0].step_type, StepType::Retrieve);
+        assert_eq!(w.steps[0].children[0].status, Status::Ok);
     }
 
     #[test]
